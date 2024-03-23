@@ -5,7 +5,7 @@ import os
 from typing import Any, Mapping, Sequence
 from pathlib import Path
 
-import requests
+import urllib3
 
 
 logger = logging.getLogger(__name__)
@@ -14,18 +14,19 @@ class BaseScraper(ABC):
 
     def __init__(self, file_path: str, file_name: str, headers: Mapping[str, str]):
         self.headers = headers
-        self.session = self.create_session()
+        self.pool_manager = self.create_pool_manager()
         self.file_name = file_name
         self.file_path = Path(file_path)
 
-    def create_session(self) -> requests.Session:
-        return requests.Session()
+    def create_pool_manager(self) -> urllib3.PoolManager:
+        return urllib3.PoolManager()
 
-    def get_req(self, base_url: str, endpoint: str, params: Sequence[Mapping[str,Any]]) -> requests.Response:
+    def get_req(self, base_url: str, endpoint: str, params: Sequence[Mapping[str,Any]]) -> urllib3.BaseHTTPResponse:
         try:
-            response = self.session.get(
+            response = self.pool_manager.request(
+                'GET',
                 base_url + endpoint,
-                params = params,
+                fields = params,
                 headers = self.headers)
             return response
         except Exception as e:
@@ -34,10 +35,12 @@ class BaseScraper(ABC):
 
     def get_file(self, file_url: str, params: Sequence[Mapping[str,Any]], date: datetime) -> Path:
         try:
-            response = self.session.get(
+            response = self.pool_manager.request(
+                'GET',
                 file_url,
-                params = params,
-                headers = self.headers)
+                fields = params,
+                headers = self.headers,
+                preload_content = False)
         except Exception as e:
             logger.exception(e)
 
@@ -66,6 +69,14 @@ class BaseScraper(ABC):
 
     @abstractmethod
     def run_scrape(self):
+        pass
+
+    @abstractmethod
+    def bs_parse(self):
+        pass
+
+    @abstractmethod
+    def clean(self):
         pass
 
 
