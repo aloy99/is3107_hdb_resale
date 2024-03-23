@@ -55,7 +55,6 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW_CONN_RESALE_PRICE_DB: postgresql://user:pw@postgres-data-warehouse/resale_price_proj
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     # For backward compatibility, with Airflow <2.3
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -97,20 +96,6 @@ services:
       - postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 10s
-      retries: 5
-      start_period: 5s
-    restart: always
-  postgres-data-warehouse:
-    image: postgres:13
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pw
-      POSTGRES_DB: resale_price_proj
-    volumes:
-      - postgres-db-warehouse-vol:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready -U user -d resale_price_proj"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -313,4 +298,3 @@ services:
 
 volumes:
   postgres-db-volume:
-  postgres-db-warehouse-vol:
