@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os
 from typing import Any, Mapping, Sequence, Generator
@@ -16,8 +16,6 @@ from scraper.datagov.constants import (
     DATASETS_ENDPOINT,
     RESALE_PRICE_COLLECTION_ID)
 
-
-
 logger = logging.getLogger(__name__)
 
 class DataGovScraper(BaseScraper):
@@ -26,48 +24,56 @@ class DataGovScraper(BaseScraper):
         super().__init__(file_path, file_name, headers)
         self.mode = mode
 
-    def scrape_dataset(self, dataset_id: str) -> Generator[Mapping[str,Any], None, None]:
+    def scrape_dataset(self, dataset_id: str, params = {}) -> Generator[Mapping[str,Any], None, None]:
         url = DATAGOV_DATASETS_URL + DATASETS_ENDPOINT + f'?resource_id={dataset_id}'
         offset = 0
         total = 1
         while offset < total:
-            response = self.get_req(url, "", {})
+            response = self.get_req(url, "", params)
             data = response.json()
             offset = data['result'].get('offset', 0)
             total = data['result'].get('total', 0)
             url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next')
             yield [list(x.values()) for x in data['result']['records']]
     
-    def run_scrape(self):
+    def run_scrape(self, current_date: datetime):
         if self.mode == 'backfill':
             return self.run_scrape_backfill()
         else:
-            return self.run_scrape_live()
-
+            return self.run_scrape_live(current_date)
 
     def run_scrape_backfill(self):
         response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), {})
-        collections_data = response.json() 
-        dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
+        collections_data = response.json()
+        try:
+            dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
+        except Exception:
+            logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
         for dataset_id in dataset_ids:
             yield from self.scrape_dataset(dataset_id)
-            #historical_data.append(pd.from_records(dataset))
 
-        #return pd.concat(historical_data)
-            
-
-    def run_scrape_live(self):
-        #to do: accept execution date, filter in api req
+    def run_scrape_live(self, current_date: datetime) -> Generator[Mapping[str,Any], None, None]:
+        """
+        Scrapes from the live dataset, for the current month and previous month.
+        API does not support filter for GTE, so two queries are made.
+        """
+        curr_month_str = current_date.strftime("%Y-%m")
+        prev_month_str = (current_date.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
         response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), {})
         collections_data = response.json() 
-        dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
+        try:
+            dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
+        except Exception:
+            logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
         for dataset_id in dataset_ids:
-            dataset_meta_response = self.get_req(DATAGOV_COLLECTIONS_URL, DATASETS_META_ENDPOINT.format(dataset_id), {})
-            if dataset_meta_response.json().get("data", {}).get("name", {}) == "Resale flat prices based on registration date from Jan-2017 onwards":
-                yield from self.scrape_dataset(dataset_id)
-        # try:
-        #     return pd.from_records(dataset)
-        # except Exception:
-        #     logger.exception("Unable to find live dataset")
+            dataset_meta_response = self.get_req(
+                DATAGOV_COLLECTIONS_URL,
+                DATASETS_META_ENDPOINT.format(dataset_id),
+                {})
+            if "onwards" in dataset_meta_response.json().get("data", {}).get("name", {}):
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{"month": {prev_month_str}}'})
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{"month": {curr_month_str}}'})
+            else:
+                logger.error("Live dataset not found in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
 
 

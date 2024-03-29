@@ -64,8 +64,4 @@ class BaseScraper(ABC):
 
         return file_path
 
-    @abstractmethod
-    def run_scrape(self):
-        pass
-
 
