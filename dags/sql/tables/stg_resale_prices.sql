@@ -1,14 +1,14 @@
 CREATE TABLE IF NOT EXISTS staging.stg_resale_prices(
     id SERIAL,
-    transaction_month TEXT NOT NULL,
-    town TEXT NOT NULL,
-    flat_type TEXT NOT NULL,
-    block_num TEXT NOT NULL,
-    street_name TEXT NOT NULL,
-    storey_range TEXT NOT NULL,
-    floor_area_sqm FLOAT NOT NULL,
-    flat_model TEXT NOT NULL,
-    lease_commence_date TEXT NOT NULL,
-    remaining_lease TEXT NOT NULL,
-    resale_price FLOAT NOT NULL
+    transaction_month TEXT,
+    town TEXT,
+    flat_type TEXT,
+    block TEXT,
+    street_name TEXT,
+    storey_range TEXT,
+    floor_area_sqm FLOAT,
+    flat_model TEXT,
+    lease_commence_date TEXT,
+    remaining_lease TEXT,
+    resale_price FLOAT
 );

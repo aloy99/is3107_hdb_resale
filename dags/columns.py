@@ -13,7 +13,7 @@ STG_RESALE_PRICES_META = TableMeta('staging','stg_resale_prices',[
         'transaction_month',
         'town',
         'flat_type',
-        'block_num',
+        'block',
         'street_name',
         'storey_range',
         'floor_area_sqm',

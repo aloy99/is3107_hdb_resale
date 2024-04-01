@@ -54,16 +54,24 @@ def hdb_pipeline():
                 if pg_hook.supports_autocommit:
                     pg_hook.set_autocommit(conn, True)
                 with closing(conn.cursor()) as cursor:
+                    print(f"""
+                        INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
+                        VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
+                        RETURNING id;
+                        """)
                     cursor.execute(
                         f"""
                         INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
                         VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
+                        ON CONFLICT DO NOTHING
                         RETURNING id;
                         """,
                         [val for row in rows for val in row]
                     )
-                    first_id = first_id if first_id else cursor.fetchone()
-            return first_id[0] if first_id else first_id
+                    curr_id = cursor.fetchone()
+                    first_id = first_id if first_id else curr_id
+                    first_id = min(first_id, curr_id)
+        return first_id[0] if first_id else first_id
         
 
     create_pg_warehouse_schema = PostgresOperator(

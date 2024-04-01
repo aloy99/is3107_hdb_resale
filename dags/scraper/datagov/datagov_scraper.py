@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import logging
-from typing import Any, Mapping, Generator, Tuple
+from typing import Any, Mapping, Generator, Tuple, Sequence
 import requests
 
 import pandas as pd
@@ -13,7 +13,8 @@ from scraper.datagov.constants import (
     COLLECTIONS_ENDPOINT,
     DATASETS_META_ENDPOINT,
     DATASETS_ENDPOINT,
-    RESALE_PRICE_COLLECTION_ID)
+    RESALE_PRICE_COLLECTION_ID,
+    RESALE_PRICE_FIELDS)
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,15 @@ class DataGovScraper(BaseScraper):
             offset = data['result'].get('offset', 0)
             total = data['result'].get('total', 0)
             url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next')
-            yield [tuple(v for k,v in row.items() if k != '_id') for row in records]
+
+            #process data
+            if records:
+                # yield [tuple(v for k,v in row.items() if k != '_id') for row in records]
+                yield [self._row_handler(row) for row in records]
+    
+    def _row_handler(self, row: Mapping[str, Any]) -> Sequence[Any]:
+        return tuple(row.get(field, None) for field in RESALE_PRICE_FIELDS)
+
     
     @backoff.on_exception(backoff.expo,
                            KeyError)
@@ -55,6 +64,7 @@ class DataGovScraper(BaseScraper):
         except Exception:
             logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
         for dataset_id in dataset_ids:
+            logger.info(f"Scraping dataset {dataset_id}")
             yield from self.scrape_dataset(dataset_id)
 
     def run_scrape_live(self, current_date: datetime) -> Generator[Mapping[str,Any], None, None]:

@@ -52,8 +52,9 @@ class OnemapScraper(BaseScraper):
             return {k.lower():None for k in fields}
         
     def enhance_resale_price(self, data: pd.DataFrame) -> pd.DataFrame:
+        if data.shape[0] == 0:
+            return data
         new_data = data.copy()
-        print(new_data['block_num'] + ' ' + new_data['street_name']).apply(lambda x: pd.Series(self.scrape_address_postal_coords(x)))
-        new_data[['latitude', 'longitude', 'postal']] = (new_data['block_num'] + ' ' + new_data['street_name']).apply(lambda x: pd.Series(self.scrape_address_postal_coords(x)))
+        new_data[['latitude', 'longitude', 'postal']] = (new_data['block'] + ' ' + new_data['street_name']).apply(lambda x: pd.Series(self.scrape_address_postal_coords(x)))
         return new_data
 
