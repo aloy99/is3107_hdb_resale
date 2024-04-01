@@ -1,4 +1,5 @@
 pandas
+backoff
 beautifulsoup4
 apache-airflow
 apache-airflow-providers-postgres

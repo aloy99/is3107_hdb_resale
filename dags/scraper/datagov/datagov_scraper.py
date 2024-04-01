@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta
 import logging
-import os
-from typing import Any, Mapping, Sequence, Generator
-from pathlib import Path
-import json
+from typing import Any, Mapping, Generator, Tuple
+import requests
 
 import pandas as pd
+import backoff
 
 from scraper.base_scraper import BaseScraper
 from scraper.datagov.constants import (
@@ -20,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 class DataGovScraper(BaseScraper):
 
-    def __init__(self, file_path: str, file_name: str, headers: Mapping[str, str], mode: str):
-        super().__init__(file_path, file_name, headers)
+    def __init__(self, headers: Mapping[str, str], mode: str):
+        super().__init__("", "", headers)
         self.mode = mode
 
     def scrape_dataset(self, dataset_id: str, params = {}) -> Generator[Mapping[str,Any], None, None]:
@@ -29,12 +28,18 @@ class DataGovScraper(BaseScraper):
         offset = 0
         total = 1
         while offset < total:
-            response = self.get_req(url, "", params)
-            data = response.json()
+            data, records = self.get_records(url, params)
             offset = data['result'].get('offset', 0)
             total = data['result'].get('total', 0)
             url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next')
-            yield [list(x.values()) for x in data['result']['records']]
+            yield [tuple(v for k,v in row.items() if k != '_id') for row in records]
+    
+    @backoff.on_exception(backoff.expo,
+                           KeyError)
+    def get_records(self, url: str, params: str) -> Tuple[Mapping[str, Any], Mapping[str, Any]]:
+        response = self.get_req(url, "", params)
+        data = response.json()
+        return data, data['result']['records']
     
     def run_scrape(self, current_date: datetime):
         if self.mode == 'backfill':

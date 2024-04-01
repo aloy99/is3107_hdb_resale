@@ -6,6 +6,7 @@ from typing import Any, Mapping, Sequence
 from pathlib import Path
 
 import requests
+import backoff
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ class BaseScraper(ABC):
     def create_session(self) -> requests.Session:
         return requests.Session()
 
+
+    @backoff.on_exception(backoff.expo,
+                          (requests.exceptions.RequestException))
     def get_req(self, base_url: str, endpoint: str, params: Sequence[Mapping[str,Any]]) -> requests.Response:
         try:
             response = self.session.get(
