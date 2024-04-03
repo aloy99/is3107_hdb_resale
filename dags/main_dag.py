@@ -45,7 +45,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "backfill")
+        data_gov_scraper = DataGovScraper({}, "backfill") # change backfill to live to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         for rows in data_gov_scraper.run_scrape(date):
             first_id = None
@@ -92,6 +92,8 @@ def hdb_pipeline():
     #     sql = "enhance_resale_price_coords_select.sql",
     #     # params = {'min_id': "{{ task_instance.xcom_pull(task_ids='scrape_resale_prices') }}"}
     # )
+
+    # TODO: add data cleaning logic here in conjunction with latlong retrieval
     @task
     def enhance_resale_price_coords(min_id: int):
         onemap_scraper = OnemapScraper({})
