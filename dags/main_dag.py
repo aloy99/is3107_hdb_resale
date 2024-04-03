@@ -45,7 +45,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "backfill") # change backfill to live to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "live") # change backfill to live to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         for rows in data_gov_scraper.run_scrape(date):
             first_id = None
@@ -54,23 +54,19 @@ def hdb_pipeline():
                 if pg_hook.supports_autocommit:
                     pg_hook.set_autocommit(conn, True)
                 with closing(conn.cursor()) as cursor:
-                    print(f"""
-                        INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
-                        VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        RETURNING id;
-                        """)
                     cursor.execute(
                         f"""
                         INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
                         VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        ON CONFLICT DO NOTHING
+                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])}) DO NOTHING
                         RETURNING id;
                         """,
                         [val for row in rows for val in row]
                     )
                     curr_id = cursor.fetchone()
-                    first_id = first_id if first_id else curr_id
-                    first_id = min(first_id, curr_id)
+                    if curr_id:
+                        first_id = first_id if first_id else curr_id
+                        first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
         
 
@@ -85,17 +81,12 @@ def hdb_pipeline():
         postgres_conn_id = "resale_price_db",
         sql = "sql/tables/int_resale_prices.sql"
     )
-        
-    # select_new_resale_price_rows = PostgresOperator(
-    #     task_id = "enhance_resale_price_coords_select",
-    #     postgres_conn_id = "resale_price_db",
-    #     sql = "enhance_resale_price_coords_select.sql",
-    #     # params = {'min_id': "{{ task_instance.xcom_pull(task_ids='scrape_resale_prices') }}"}
-    # )
 
     # TODO: add data cleaning logic here in conjunction with latlong retrieval
     @task
     def enhance_resale_price_coords(min_id: int):
+        if not min_id:
+            return
         onemap_scraper = OnemapScraper({})
         pg_hook = PostgresHook("resale_price_db")
         with open("/opt/airflow/dags/enhance_resale_price_coords_select.sql", 'r') as file:
@@ -106,7 +97,6 @@ def hdb_pipeline():
 
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
         records = [list(row) for row in enhanced_rows.itertuples(index=False)] 
-        #records = enhanced_rows.to_records(index=False)
         columns = list(enhanced_rows.columns)
 
         pg_hook.insert_rows(
@@ -115,22 +105,6 @@ def hdb_pipeline():
             target_fields = columns,
             commit_every = 500
         )
-
-        # resale_price_new_rows = PostgresOperator(
-        #     task_id = "enhance_resale_price_coords_select",
-        #     postgres_conn_id = "resale_price_db",
-        #     sql = "enhance_resale_price_coords_select.sql",
-        #     params = {'min_id': min_id}
-        # )
-        # new_rows = resale_price_new_rows.execute({})
-        
-        # pg_hook = PostgresHook("resale_price_db")
-        # pg_hook.insert_rows(
-        #     table='warehouse.int_resale_prices',
-        #     rows = enhanced_rows.to_dict()
-        # )
-
-        #select from stg_resale_prices where obs_time > prev
 
         
     scrape_resale_prices_ = scrape_resale_prices()

@@ -32,7 +32,7 @@ class DataGovScraper(BaseScraper):
             data, records = self.get_records(url, params)
             offset = data['result'].get('offset', 0)
             total = data['result'].get('total', 0)
-            url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next')
+            url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next').split("&filters")[0]
 
             #process data
             if records:
@@ -44,7 +44,8 @@ class DataGovScraper(BaseScraper):
 
     
     @backoff.on_exception(backoff.expo,
-                           KeyError)
+                           KeyError,
+                           max_tries=3)
     def get_records(self, url: str, params: str) -> Tuple[Mapping[str, Any], Mapping[str, Any]]:
         response = self.get_req(url, "", params)
         data = response.json()
@@ -73,22 +74,24 @@ class DataGovScraper(BaseScraper):
         API does not support filter for GTE, so two queries are made.
         """
         curr_month_str = current_date.strftime("%Y-%m")
-        prev_month_str = (current_date.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+        prev_month_str = (current_date.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")    
         response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), {})
         collections_data = response.json() 
         try:
             dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
         except Exception:
             logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
+        live_dataset_found = False
         for dataset_id in dataset_ids:
             dataset_meta_response = self.get_req(
                 DATAGOV_COLLECTIONS_URL,
                 DATASETS_META_ENDPOINT.format(dataset_id),
                 {})
             if "onwards" in dataset_meta_response.json().get("data", {}).get("name", {}):
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{"month": {prev_month_str}}'})
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{"month": {curr_month_str}}'})
-            else:
-                logger.error("Live dataset not found in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
+                live_dataset_found = True
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{prev_month_str}"}}'})
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{curr_month_str}"}}'})
+        if not live_dataset_found:
+            logger.error("Live dataset not found in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
 
 
