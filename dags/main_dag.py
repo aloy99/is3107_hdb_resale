@@ -83,7 +83,6 @@ def hdb_pipeline():
         sql = "sql/tables/int_resale_prices.sql"
     )
 
-    # TODO: add data cleaning logic here in conjunction with latlong retrieval
     @task
     def enhance_resale_price_coords(min_id: int):
         if not min_id:
@@ -95,19 +94,22 @@ def hdb_pipeline():
             new_rows = pg_hook.get_pandas_df(
                 sql = sql_query.format(min_id)
             )
-
+        # Add location data
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
-        records = [list(row) for row in enhanced_rows.itertuples(index=False)] 
+        # Remove rows without location data
+        filtered_rows = enhanced_rows[enhanced_rows['postal'].notnull()]
+        records = [list(row) for row in filtered_rows.itertuples(index=False)] 
         columns = list(enhanced_rows.columns)
-
+        # Persist to data warehouse
         pg_hook.insert_rows(
             table = 'warehouse.int_resale_prices',
             rows = records,
             target_fields = columns,
             commit_every = 500
         )
+        print("Inserted enhanced data into warehouse.int_resale_prices\n")
+        print(pd.DataFrame(records))
 
-        
     scrape_resale_prices_ = scrape_resale_prices()
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
     
