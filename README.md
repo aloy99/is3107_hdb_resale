@@ -6,5 +6,17 @@
 To exec into a docker container
 ```docker exec -u airflow -it <<container_id>> bash```
 
+<<<<<<< Updated upstream
+=======
+## Using Postgres
+To exec into postgres docker container
+```docker exec -it 41b129c0d3d3 psql -U user -d resale_price_proj```
+
+To select and view all tables
+```SET search_path TO warehouse, public;```
+```\dt```
+
+## Report Generation
+>>>>>>> Stashed changes
 To extract pdfs
 ```docker cp <<container_id>>:/opt/airflow/<<report_name>>.pdf .```
