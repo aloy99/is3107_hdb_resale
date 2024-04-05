@@ -11,6 +11,7 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 import pandas as pd
 
 from columns import TABLE_META
+from constants import DEV_MODE, DEV_REDUCED_ROWS
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 from transformations.enhance_resale_price import enhance_resale_price
@@ -24,7 +25,6 @@ default_args = {
     "retries": 3,
     "retry_delay": timedelta(minutes=10)
 }
-
 
 @dag(dag_id='hdb_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
 def hdb_pipeline():
@@ -45,11 +45,12 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "live") # change backfill to live to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
-        for rows in data_gov_scraper.run_scrape(date):
-            first_id = None
-            #necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
+        first_id = None
+        for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
+            if DEV_MODE and idx == DEV_REDUCED_ROWS: break
+            # necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
             with closing(pg_hook.get_conn()) as conn:
                 if pg_hook.supports_autocommit:
                     pg_hook.set_autocommit(conn, True)

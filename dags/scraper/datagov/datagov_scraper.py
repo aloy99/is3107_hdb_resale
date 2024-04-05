@@ -6,6 +6,7 @@ import requests
 import pandas as pd
 import backoff
 
+from constants import DEV_MODE, DEV_REDUCED_ROWS
 from scraper.base_scraper import BaseScraper
 from scraper.datagov.constants import (
     DATAGOV_COLLECTIONS_URL,
@@ -58,7 +59,8 @@ class DataGovScraper(BaseScraper):
             return self.run_scrape_live(current_date)
 
     def run_scrape_backfill(self):
-        response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), {})
+        params = {} if not DEV_MODE else {'limit': DEV_REDUCED_ROWS}
+        response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), params)
         collections_data = response.json()
         try:
             dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
