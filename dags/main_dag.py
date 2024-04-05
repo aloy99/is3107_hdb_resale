@@ -59,7 +59,7 @@ def hdb_pipeline():
                         f"""
                         INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
                         VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])}) DO NOTHING
+                        ON CONFLICT DO NOTHING
                         RETURNING id;
                         """,
                         [val for row in rows for val in row]
