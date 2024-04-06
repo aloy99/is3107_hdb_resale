@@ -16,6 +16,7 @@ def get_mrt_opening_dates():
 def get_mrt_location(OnemapScraper):
     mrt_dates = get_mrt_opening_dates()
     mrts_df = pd.DataFrame(list(mrt_dates.items()), columns=['mrt', 'opening_date'])
+    mrts_df['opening_date'] = pd.to_datetime(mrts_df['opening_date'], format='%d %B %Y')
     mrts_df[['latitude', 'longitude']] = mrts_df['mrt'].apply(
         lambda x: pd.Series(OnemapScraper.scrape_address_postal_coords(x))[['latitude', 'longitude']]
     )    
