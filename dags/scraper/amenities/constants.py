@@ -1,0 +1,1 @@
+MRT_OPENING_DATES_URL = "https://firebasestorage.googleapis.com/v0/b/storeroom-eac25.appspot.com/o/mrt_data.json?alt=media&token=d6abd4cd-c5cc-4bd1-88ec-2391b2f88e7b"

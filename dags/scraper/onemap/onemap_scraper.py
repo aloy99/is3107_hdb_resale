@@ -1,8 +1,8 @@
+import os
 import logging
-from typing import Any, Mapping, Sequence, Generator
 import threading
+from typing import Any, Mapping, Sequence, Generator
 from concurrent.futures import ThreadPoolExecutor
-
 import pandas as pd
 
 from scraper.base_scraper import BaseScraper
@@ -46,7 +46,7 @@ class OnemapScraper(BaseScraper):
             data = response.json()
             return {k.lower():v for k,v in data['results'][0].items() if k in fields}
         except (ValueError, IndexError):
-            return {k.lower():None for k in fields}
+            logger.info(f'No results found for address {address}')
         
     def enhance_resale_price(self, data: pd.DataFrame) -> pd.DataFrame:
         # if data.shape[0] == 0:
