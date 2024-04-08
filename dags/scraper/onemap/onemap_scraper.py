@@ -1,9 +1,7 @@
-from datetime import datetime
 import logging
-import os
 from typing import Any, Mapping, Sequence, Generator
-from pathlib import Path
-import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
@@ -48,13 +46,15 @@ class OnemapScraper(BaseScraper):
             data = response.json()
             return {k.lower():v for k,v in data['results'][0].items() if k in fields}
         except (ValueError, IndexError):
-            logger.info('No results found')
             return {k.lower():None for k in fields}
         
     def enhance_resale_price(self, data: pd.DataFrame) -> pd.DataFrame:
-        if data.shape[0] == 0:
-            return data
+        # if data.shape[0] == 0:
+        #     return data
         new_data = data.copy()
-        new_data[['latitude', 'longitude', 'postal']] = (new_data['block'] + ' ' + new_data['street_name']).apply(lambda x: pd.Series(self.scrape_address_postal_coords(x)))
+        address_list = (new_data['block'] + ' ' + new_data['street_name']).to_list()
+        with ThreadPoolExecutor(10) as executor:
+            results = list(executor.map(self.scrape_address_postal_coords, address_list))
+        new_data[['latitude', 'longitude', 'postal']] = pd.DataFrame(results, index=new_data.index) if results else None
         return new_data
 

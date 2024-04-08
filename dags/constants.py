@@ -1,2 +1,2 @@
-DEV_MODE = True
+DEV_MODE = False
 DEV_REDUCED_ROWS = 5

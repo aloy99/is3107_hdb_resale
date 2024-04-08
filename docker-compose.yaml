@@ -161,7 +161,9 @@ services:
 
   airflow-worker:
     <<: *airflow-common
-    command: celery worker
+    command: celery worker --pid=/airflow-worker/airflow-worker.pid
+    tmpfs:
+      - /airflow-worker
     healthcheck:
       # yamllint disable rule:line-length
       test:

@@ -45,7 +45,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
@@ -59,7 +59,7 @@ def hdb_pipeline():
                         f"""
                         INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
                         VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        ON CONFLICT DO NOTHING
+                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])}) DO NOTHING
                         RETURNING id;
                         """,
                         [val for row in rows for val in row]
@@ -89,7 +89,7 @@ def hdb_pipeline():
             return
         onemap_scraper = OnemapScraper({})
         pg_hook = PostgresHook("resale_price_db")
-        with open("/opt/airflow/dags/enhance_resale_price_coords_select.sql", 'r') as file:
+        with open("/opt/airflow/dags/sql/enhance_resale_price_coords_select.sql", 'r') as file:
             sql_query = file.read()
             new_rows = pg_hook.get_pandas_df(
                 sql = sql_query.format(min_id)
@@ -113,7 +113,7 @@ def hdb_pipeline():
     scrape_resale_prices_ = scrape_resale_prices()
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
     
-    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price >> enhance_resale_price_coords(62501)
+    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price >> enhance_resale_price_coords(scrape_resale_prices_)
 
 
 hdb_pipeline_dag = hdb_pipeline()

@@ -35,9 +35,7 @@ class DataGovScraper(BaseScraper):
             total = data['result'].get('total', 0)
             url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next').split("&filters")[0]
 
-            #process data
             if records:
-                # yield [tuple(v for k,v in row.items() if k != '_id') for row in records]
                 yield [self._row_handler(row) for row in records]
     
     def _row_handler(self, row: Mapping[str, Any]) -> Sequence[Any]:

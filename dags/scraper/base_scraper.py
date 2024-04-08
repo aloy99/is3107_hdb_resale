@@ -6,6 +6,7 @@ from typing import Any, Mapping, Sequence
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
 import backoff
 
 
@@ -20,7 +21,9 @@ class BaseScraper(ABC):
         self.file_path = Path(file_path)
 
     def create_session(self) -> requests.Session:
-        return requests.Session()
+        s = requests.Session()
+        s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=10))
+        return s
 
 
     @backoff.on_exception(backoff.expo,

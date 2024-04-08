@@ -12,7 +12,7 @@ To exec into postgres docker container
 ```docker exec -it <<container_id>> psql -U user -d resale_price_proj```
 
 To select and view all tables
-```SET search_path TO warehouse, public;```
+```SET search_path TO warehouse, staging, public;```
 ```\dt```
 
 ## Report Generation
