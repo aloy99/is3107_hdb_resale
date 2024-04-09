@@ -97,7 +97,7 @@ def hdb_pipeline():
         # Add location data
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
         # Remove rows without location data
-        filtered_rows = enhanced_rows[enhanced_rows['postal'].notnull()]
+        filtered_rows = enhanced_rows[enhanced_rows['postal'].notnull() and enhanced_rows['postal'] != 'NIL']
         records = [list(row) for row in filtered_rows.itertuples(index=False)] 
         columns = list(enhanced_rows.columns)
         # Persist to data warehouse
