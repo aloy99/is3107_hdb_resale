@@ -47,6 +47,7 @@ class OnemapScraper(BaseScraper):
             return {k.lower():v for k,v in data['results'][0].items() if k in fields}
         except (ValueError, IndexError):
             logger.info(f'No results found for address {address}')
+            return {k.lower():None for k in fields}
         
     def enhance_resale_price(self, data: pd.DataFrame) -> pd.DataFrame:
         # if data.shape[0] == 0:

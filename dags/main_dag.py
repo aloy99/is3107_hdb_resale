@@ -97,10 +97,16 @@ def hdb_pipeline():
             )
         # Add location data
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
+        enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
+        enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
         # Remove rows without location data
-        filtered_rows = enhanced_rows[enhanced_rows['postal'].notnull() and enhanced_rows['postal'] != 'NIL']
+        filtered_rows = enhanced_rows[
+            (enhanced_rows['postal'].notna()) & 
+            (enhanced_rows['latitude'].notna()) &
+            (enhanced_rows['longitude'].notna())
+        ]
         records = [list(row) for row in filtered_rows.itertuples(index=False)] 
-        columns = list(enhanced_rows.columns)
+        columns = list(filtered_rows.columns)
         # Persist to data warehouse
         pg_hook.insert_rows(
             table = 'warehouse.int_resale_prices',
@@ -129,7 +135,7 @@ def hdb_pipeline():
         for _, flat in resale_prices_df.iterrows():
             for _, mrt in mrts_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                if distance <= 2:
+                if distance <= 10:
                     pg_hook.run("""
                         INSERT INTO warehouse.nearest_mrts (flat_id, mrt_id, distance)
                         VALUES (%s, %s, %s)
@@ -137,7 +143,7 @@ def hdb_pipeline():
 
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
-                SET processed_for_mrts = TRUE
+                SET processed_for_mrts = FALSE
                 WHERE id = %s
             """, parameters=[flat['id']])
 

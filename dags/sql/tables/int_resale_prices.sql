@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     flat_model TEXT,
     lease_commence_date TEXT,
     remaining_lease TEXT,
-    resale_price INT,
+    resale_price FLOAT,
     postal TEXT,
     longitude FLOAT,
     latitude FLOAT,
