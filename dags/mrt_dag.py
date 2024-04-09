@@ -29,22 +29,28 @@ def mrt_pipeline():
         sql = "CREATE SCHEMA IF NOT EXISTS staging;"
     )
 
-    create_stg_resale_price = PostgresOperator(
-        task_id = "create_stg_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_mrts.sql"
-    )
-
     create_pg_warehouse_schema = PostgresOperator(
         task_id = "create_pg_warehouse_schema",
         postgres_conn_id = "resale_price_db",
         sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
     )
 
-    create_int_resale_price = PostgresOperator(
+    create_stg_resale_price = PostgresOperator(
+        task_id = "create_stg_resale_price",
+        postgres_conn_id = "resale_price_db",
+        sql = "sql/tables/stg_mrts.sql"
+    )
+
+    create_int_mrts = PostgresOperator(
         task_id = "create_int_mrts",
         postgres_conn_id = "resale_price_db",
         sql = "sql/tables/int_mrts.sql"
+    )
+
+    create_int_nearest_mrts = PostgresOperator(
+        task_id = "create_int_nearest_mrts",
+        postgres_conn_id = "resale_price_db",
+        sql = "sql/tables/int_nearest_mrts.sql"
     )
 
     @task
@@ -81,26 +87,9 @@ def mrt_pipeline():
                     cur.execute(insert_stmt, (row['mrt'], row['opening_date'], row['latitude'], row['longitude']))
                 conn.commit()
         print("committed mrt data into warehouse")
-
-    # @task
-    # def find_nearest_mrts():
-    #     onemap_scraper = OnemapScraper({})
-    #     mrts_df = get_mrt_location(onemap_scraper)
-    #     print("Retrieved MRT location data\n", mrts_df)
-    #     # persist to staging db
-    #     pg_hook = PostgresHook("resale_price_db")
-    #     insert_stmt = """
-    #     INSERT INTO staging.stg_mrts (mrt, opening_date, latitude, longitude)
-    #     VALUES (%s, %s, %s, %s) ON CONFLICT (mrt) DO NOTHING;
-    #     """
-    #     with closing(pg_hook.get_conn()) as conn:
-    #         with conn.cursor() as cur:
-    #             for _, row in mrts_df.iterrows():
-    #                 cur.execute(insert_stmt, (row['mrt'], row['opening_date'], row['latitude'], row['longitude']))
-    #             conn.commit()
-    #     print("committed mrt data into staging db")    
         
     scrape_mrt_data_ = scrape_mrt_data()
-    create_pg_stg_schema >> create_pg_warehouse_schema >> create_stg_resale_price >> create_int_resale_price >> scrape_mrt_data_ >> scrape_mrt_location_data(scrape_mrt_data_)
+    create_pg_stg_schema >> create_pg_warehouse_schema >> create_stg_resale_price >> create_int_mrts >> create_int_nearest_mrts >> scrape_mrt_data_ 
+    scrape_mrt_data_ >> scrape_mrt_location_data(scrape_mrt_data_)
 
 mrt_pipeline_dag = mrt_pipeline()

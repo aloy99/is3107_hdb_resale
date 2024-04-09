@@ -24,4 +24,4 @@ def get_mrt_location(OnemapScraper, mrts_df):
     else:
         print("The following MRTs are missing location data:")
         print(missing_latitude)
-    return mrts_df
+    return mrts_df    
