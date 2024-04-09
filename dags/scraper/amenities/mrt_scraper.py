@@ -6,16 +6,14 @@ from scraper.onemap.onemap_scraper import OnemapScraper
 def get_mrt_opening_dates():
     response = requests.get(MRT_OPENING_DATES_URL)
     if response.status_code == 200:
-        data = response.json()
-        print("Retrieved MRT data!\n", data)
-        return data
+        mrt_dates = response.json()
+        print("Retrieved MRT data!\n", mrt_dates)
+        return pd.DataFrame(list(mrt_dates.items()), columns=['mrt', 'opening_date'])
     else:
         print(f"Failed to retrieve MRT opening dates: {response.status_code}")
         return None
 
-def get_mrt_location(OnemapScraper):
-    mrt_dates = get_mrt_opening_dates()
-    mrts_df = pd.DataFrame(list(mrt_dates.items()), columns=['mrt', 'opening_date'])
+def get_mrt_location(OnemapScraper, mrts_df):
     mrts_df['opening_date'] = pd.to_datetime(mrts_df['opening_date'], format='%d %B %Y')
     mrts_df[['latitude', 'longitude']] = mrts_df['mrt'].apply(
         lambda x: pd.Series(OnemapScraper.scrape_address_postal_coords(x))[['latitude', 'longitude']]
