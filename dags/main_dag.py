@@ -1,5 +1,3 @@
-import os
-import json
 from contextlib import closing
 from datetime import datetime, timedelta
 
@@ -95,19 +93,17 @@ def hdb_pipeline():
             new_rows = pg_hook.get_pandas_df(
                 sql = sql_query.format(min_id)
             )
-        # Add location data
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
+        # Convert months to datetime format
+        enhanced_rows['transaction_month'] = pd.to_datetime(enhanced_rows['transaction_month'])
+        # Get location data
         enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
         enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
-        # Remove rows without location data
-        filtered_rows = enhanced_rows[
-            (enhanced_rows['postal'].notna()) & 
-            (enhanced_rows['latitude'].notna()) &
-            (enhanced_rows['longitude'].notna())
-        ]
-        records = [list(row) for row in filtered_rows.itertuples(index=False)] 
-        columns = list(filtered_rows.columns)
+        # Drop rows without location data
+        enhanced_rows = enhanced_rows[(enhanced_rows['latitude'].notna()) & (enhanced_rows['longitude'].notna())]
         # Persist to data warehouse
+        records = [list(row) for row in enhanced_rows.itertuples(index=False)] 
+        columns = list(enhanced_rows.columns)
         pg_hook.insert_rows(
             table = 'warehouse.int_resale_prices',
             rows = records,
@@ -116,7 +112,7 @@ def hdb_pipeline():
         )
         print("Inserted enhanced data into warehouse.int_resale_prices\n")
         print(pd.DataFrame(records))
-
+    
     @task
     def get_mrts_within_2km():
         pg_hook = PostgresHook("resale_price_db")

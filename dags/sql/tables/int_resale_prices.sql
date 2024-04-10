@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     id TEXT NOT NULL,
-    transaction_month TEXT,
+    transaction_month DATE,
     town TEXT,
     flat_type TEXT,
     block TEXT,
@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     lease_commence_date TEXT,
     remaining_lease TEXT,
     resale_price FLOAT,
+    real_resale_price FLOAT,
     postal TEXT,
     longitude FLOAT,
     latitude FLOAT,
