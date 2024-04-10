@@ -8,7 +8,7 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 from scraper.onemap.onemap_scraper import OnemapScraper
-from scraper.amenities.mrt_scraper import get_mrt_opening_dates, get_mrt_location
+from scraper.amenities.mrt_scraper import get_mrt_opening_dates, get_mrts_location
 
 default_args = {
     "owner": "airflow",
@@ -75,7 +75,7 @@ def mrt_pipeline():
     @task 
     def scrape_mrt_location_data(mrt_opening_data):
         onemap_scraper = OnemapScraper({})
-        mrts_df = get_mrt_location(onemap_scraper, mrt_opening_data)
+        mrts_df = get_mrts_location(onemap_scraper, mrt_opening_data)
         pg_hook = PostgresHook("resale_price_db")
         insert_stmt = """
         INSERT INTO warehouse.int_mrts (mrt, opening_date, latitude, longitude)
