@@ -11,7 +11,8 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 import pandas as pd
 
 from columns import TABLE_META
-from constants import DEV_MODE, DEV_REDUCED_ROWS
+from constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
+from utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 from transformations.enhance_resale_price import enhance_resale_price
@@ -96,10 +97,16 @@ def hdb_pipeline():
             )
         # Add location data
         enhanced_rows = onemap_scraper.enhance_resale_price(new_rows)
+        enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
+        enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
         # Remove rows without location data
-        filtered_rows = enhanced_rows[enhanced_rows['postal'].notnull() and enhanced_rows['postal'] != 'NIL']
+        filtered_rows = enhanced_rows[
+            (enhanced_rows['postal'].notna()) & 
+            (enhanced_rows['latitude'].notna()) &
+            (enhanced_rows['longitude'].notna())
+        ]
         records = [list(row) for row in filtered_rows.itertuples(index=False)] 
-        columns = list(enhanced_rows.columns)
+        columns = list(filtered_rows.columns)
         # Persist to data warehouse
         pg_hook.insert_rows(
             table = 'warehouse.int_resale_prices',
@@ -110,10 +117,62 @@ def hdb_pipeline():
         print("Inserted enhanced data into warehouse.int_resale_prices\n")
         print(pd.DataFrame(records))
 
+    @task
+    def get_mrts_within_2km():
+        pg_hook = PostgresHook("resale_price_db")
+        # Fetch the recent resale price entries
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_mrts_within_2km IS NULL;
+        """)
+
+        mrts_df = pg_hook.get_pandas_df("""
+            SELECT id, mrt, latitude, longitude
+            FROM warehouse.int_mrts;
+        """)
+
+        for _, flat in resale_prices_df.iterrows():
+            count_mrts = 0
+            for _, mrt in mrts_df.iterrows():
+                distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
+                if distance <= 2:
+                    count_mrts += 1
+                    pg_hook.run("""
+                        INSERT INTO warehouse.int_nearest_mrts (flat_id, mrt_id, distance)
+                        VALUES (%s, %s, %s)
+                    """, parameters=(flat['id'], mrt['id'], distance))
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_mrts_within_2km = %s
+                WHERE id = %s
+            """, parameters=[count_mrts, flat['id']])
+        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrts")
+
+    @task
+    def get_dist_from_cbd():
+        pg_hook = PostgresHook("resale_price_db")
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE distance_from_cbd IS NULL;
+        """)
+        onemap_scraper = OnemapScraper({})
+        cbd_location = onemap_scraper.scrape_address_postal_coords(CBD_LANDMARK_ADDRESS)
+        for _, flat in resale_prices_df.iterrows():
+            dist_from_cbd = calc_dist((float(cbd_location['latitude']), float(cbd_location['longitude'])), (flat['latitude'], flat['longitude']))
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET distance_from_cbd = %s
+                WHERE id = %s
+            """, parameters=[dist_from_cbd, flat['id']])
+        print("Updated distance to CBD")
+       
+
+    # Pipeline Order
     scrape_resale_prices_ = scrape_resale_prices()
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
-    
-    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price >> enhance_resale_price_coords(scrape_resale_prices_)
-
+    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
+    create_int_resale_price >> enhance_resale_price_coords(scrape_resale_prices_) >> get_mrts_within_2km() >> get_dist_from_cbd()
 
 hdb_pipeline_dag = hdb_pipeline()

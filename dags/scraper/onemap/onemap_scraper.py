@@ -1,8 +1,8 @@
+import os
 import logging
-from typing import Any, Mapping, Sequence, Generator
 import threading
+from typing import Any, Mapping, Sequence, Generator
 from concurrent.futures import ThreadPoolExecutor
-
 import pandas as pd
 
 from scraper.base_scraper import BaseScraper
@@ -41,16 +41,17 @@ class OnemapScraper(BaseScraper):
         
     def scrape_address_postal_coords(self, address: str) -> Mapping[str,Any]:
         response = self.get_req(ONEMAP_URL, SEARCH_ENDPOINT, vars(OnemapSearchParams("+".join(address.split(' ')))))
-        fields = set(['LATITUDE','LONGITUDE','POSTAL'])
+        location_data = {'latitude': None, 'longitude': None, 'postal': None}
         try:
             data = response.json()
-            return {k.lower():v for k,v in data['results'][0].items() if k in fields}
+            for key in location_data:
+                location_data[key] = data['results'][0].get(key.upper())
+            return location_data
         except (ValueError, IndexError):
-            return {k.lower():None for k in fields}
+            logger.info(f'No results found for address {address}')
+            return location_data
         
     def enhance_resale_price(self, data: pd.DataFrame) -> pd.DataFrame:
-        # if data.shape[0] == 0:
-        #     return data
         new_data = data.copy()
         address_list = (new_data['block'] + ' ' + new_data['street_name']).to_list()
         with ThreadPoolExecutor(10) as executor:
