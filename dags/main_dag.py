@@ -124,7 +124,7 @@ def hdb_pipeline():
         resale_prices_df = pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
-            WHERE processed_for_mrts IS FALSE;
+            WHERE num_mrts_within_2km IS NULL;
         """)
 
         mrts_df = pg_hook.get_pandas_df("""
@@ -133,21 +133,23 @@ def hdb_pipeline():
         """)
 
         for _, flat in resale_prices_df.iterrows():
+            count_mrts = 0
             for _, mrt in mrts_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                if distance <= 10:
+                if distance <= 2:
+                    count_mrts += 1
                     pg_hook.run("""
-                        INSERT INTO warehouse.nearest_mrts (flat_id, mrt_id, distance)
+                        INSERT INTO warehouse.int_nearest_mrts (flat_id, mrt_id, distance)
                         VALUES (%s, %s, %s)
                     """, parameters=(flat['id'], mrt['id'], distance))
 
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
-                SET processed_for_mrts = FALSE
+                SET num_mrts_within_2km = %s
                 WHERE id = %s
-            """, parameters=[flat['id']])
+            """, parameters=[count_mrts, flat['id']])
 
-        print("Inserted nearest MRT stations for new resale prices into warehouse.nearest_mrts")
+        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrts")
        
 
     scrape_resale_prices_ = scrape_resale_prices()

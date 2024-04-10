@@ -14,5 +14,6 @@ CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     postal TEXT,
     longitude FLOAT,
     latitude FLOAT,
-    processed_for_mrts BOOLEAN DEFAULT FALSE
+    num_mrts_within_2km INT
+    distance_from_cbd FLOAT
 )
