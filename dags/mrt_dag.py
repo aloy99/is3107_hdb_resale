@@ -1,5 +1,5 @@
 from contextlib import closing
-from columns import TABLE_META
+from common.columns import TABLE_META
 
 from datetime import datetime, timedelta
 
