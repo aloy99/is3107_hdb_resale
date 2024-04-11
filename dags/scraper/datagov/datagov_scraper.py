@@ -1,12 +1,10 @@
 from datetime import datetime, timedelta
 import logging
 from typing import Any, Mapping, Generator, Tuple, Sequence
-import requests
 
-import pandas as pd
 import backoff
 
-from constants import DEV_MODE, DEV_REDUCED_ROWS
+from common.constants import DEV_MODE, DEV_REDUCED_ROWS
 from scraper.base_scraper import BaseScraper
 from scraper.datagov.constants import (
     DATAGOV_COLLECTIONS_URL,

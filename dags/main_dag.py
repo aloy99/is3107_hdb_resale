@@ -8,12 +8,13 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 import pandas as pd
 
-from columns import TABLE_META
-from constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
-from utils import calc_dist
+from common.columns import TABLE_META
+from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
+from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from transformations.enhance_resale_price import enhance_resale_price
+from reporting.constants import PDF_PATH, IMAGE_PATHS
+from reporting.utils import plot_real_prices, add_image_to_pdf
 
 default_args = {
     "owner": "airflow",
@@ -163,12 +164,32 @@ def hdb_pipeline():
                 WHERE id = %s
             """, parameters=[dist_from_cbd, flat['id']])
         print("Updated distance to CBD")
+
+    @task
+    def generate_report():
+        pg_hook = PostgresHook("resale_price_db")
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT transaction_month, resale_price, real_resale_price
+            FROM warehouse.int_resale_prices;
+        """)
+        # Generate plots
+        plot_real_prices(resale_prices_df)
+        # Add plots to pdf report
+        for key in IMAGE_PATHS:
+            add_image_to_pdf(IMAGE_PATHS[key], PDF_PATH, title='Resale Prices Report')
+        print(f"PDF report saved to {PDF_PATH}")
        
 
-    # Pipeline Order
+    # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
+    get_mrts_within_2km_ = get_mrts_within_2km()
+    get_dist_from_cbd_ = get_dist_from_cbd()
+    enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
+    generate_report_ = generate_report()
+    # Pipeline order
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
     scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords(scrape_resale_prices_) >> get_mrts_within_2km() >> get_dist_from_cbd()
+    create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_2km_ >> get_dist_from_cbd_
+    get_dist_from_cbd_ >> generate_report_
 
 hdb_pipeline_dag = hdb_pipeline()

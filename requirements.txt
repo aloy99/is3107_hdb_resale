@@ -3,3 +3,6 @@ backoff
 beautifulsoup4
 apache-airflow
 apache-airflow-providers-postgres
+reportlab
+matplotlib
+scipy
