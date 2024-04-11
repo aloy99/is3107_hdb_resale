@@ -87,8 +87,8 @@ class DataGovScraper(BaseScraper):
                 {})
             if "onwards" in dataset_meta_response.json().get("data", {}).get("name", {}):
                 live_dataset_found = True
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "2018-01"}}'})
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "2019-12"}}'})
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{prev_month_str}"}}'})
+                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{curr_month_str}"}}'})
         if not live_dataset_found:
             logger.error("Live dataset not found in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
 
