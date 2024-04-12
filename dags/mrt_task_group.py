@@ -1,57 +1,13 @@
 from contextlib import closing
-from common.columns import TABLE_META
-
-from datetime import datetime, timedelta
-
-from airflow.decorators import dag, task
-from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.decorators import task, task_group
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 from scraper.onemap.onemap_scraper import OnemapScraper
 from scraper.amenities.mrt_scraper import get_mrt_opening_dates, get_mrts_location
 
-default_args = {
-    "owner": "airflow",
-    "start_date": datetime(2024, 1, 1),
-    "email": ["airflow@example.com"],
-    "email_on_failure": False,
-    "email_on_retry": False,
-    "retries": 3,
-    "retry_delay": timedelta(minutes=10)
-}
 
-@dag(dag_id='mrt_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['mrt_dag'], template_searchpath=["/opt/airflow/"])
-def mrt_pipeline():
-
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_pg_warehouse_schema = PostgresOperator(
-        task_id = "create_pg_warehouse_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
-    )
-
-    create_stg_resale_price = PostgresOperator(
-        task_id = "create_stg_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_mrts.sql"
-    )
-
-    create_int_mrts = PostgresOperator(
-        task_id = "create_int_mrts",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_mrts.sql"
-    )
-
-    create_int_nearest_mrts = PostgresOperator(
-        task_id = "create_int_nearest_mrts",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_nearest_mrts.sql"
-    )
+@task_group(group_id = "mrt_init")
+def mrt_init():
 
     @task
     def scrape_mrt_data():
@@ -71,7 +27,6 @@ def mrt_pipeline():
         print("committed mrt data into warehouse")        
         return mrts_df
        
-
     @task 
     def scrape_mrt_location_data(mrt_opening_data):
         onemap_scraper = OnemapScraper({})
@@ -89,7 +44,5 @@ def mrt_pipeline():
         print("committed mrt data into warehouse")
         
     scrape_mrt_data_ = scrape_mrt_data()
-    create_pg_stg_schema >> create_pg_warehouse_schema >> create_stg_resale_price >> create_int_mrts >> create_int_nearest_mrts >> scrape_mrt_data_ 
     scrape_mrt_data_ >> scrape_mrt_location_data(scrape_mrt_data_)
 
-mrt_pipeline_dag = mrt_pipeline()
