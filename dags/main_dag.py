@@ -13,8 +13,7 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
 from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.constants import PDF_PATH, IMAGE_PATHS
-from reporting.utils import plot_real_prices, add_image_to_pdf
+from reporting.utils import consolidate_report, plot_real_prices, plot_floor_area_distribution
 
 default_args = {
     "owner": "airflow",
@@ -169,15 +168,14 @@ def hdb_pipeline():
     def generate_report():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT transaction_month, resale_price, real_resale_price
+            SELECT *
             FROM warehouse.int_resale_prices;
         """)
         # Generate plots
         plot_real_prices(resale_prices_df)
-        # Add plots to pdf report
-        for key in IMAGE_PATHS:
-            add_image_to_pdf(IMAGE_PATHS[key], PDF_PATH, title='Resale Prices Report')
-        print(f"PDF report saved to {PDF_PATH}")
+        plot_floor_area_distribution(resale_prices_df)
+        # Paste images in report
+        consolidate_report()
        
 
     # Run tasks
