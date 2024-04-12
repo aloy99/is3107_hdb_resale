@@ -45,7 +45,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
@@ -169,8 +169,10 @@ def hdb_pipeline():
     def generate_report():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT *
-            FROM warehouse.int_resale_prices;
+            SELECT rp.*, m.mrt as nearest_mrt, nm.distance as dist_to_nearest_mrt
+            FROM warehouse.int_resale_prices rp
+            JOIN warehouse.int_nearest_mrts nm ON rp.id = nm.flat_id
+            JOIN warehouse.int_mrts m ON nm.mrt_id = m.id;
         """)
         # Clean and standardise data
         resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
