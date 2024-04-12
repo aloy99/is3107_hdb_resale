@@ -13,7 +13,7 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
 from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.utils import consolidate_report, plot_all
+from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info
 from data_preparation.utils import clean_resale_prices_for_visualisation
 
 default_args = {
@@ -45,7 +45,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
@@ -59,7 +59,7 @@ def hdb_pipeline():
                         f"""
                         INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
                         VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])}) DO NOTHING
+                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
                         RETURNING id;
                         """,
                         [val for row in rows for val in row]
@@ -115,13 +115,13 @@ def hdb_pipeline():
         print(pd.DataFrame(records))
     
     @task
-    def get_mrts_within_2km():
+    def get_mrts_within_3km():
         pg_hook = PostgresHook("resale_price_db")
         # Fetch the recent resale price entries
         resale_prices_df = pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
-            WHERE num_mrts_within_2km IS NULL;
+            WHERE num_mrts_within_3km IS NULL;
         """)
 
         mrts_df = pg_hook.get_pandas_df("""
@@ -133,7 +133,7 @@ def hdb_pipeline():
             count_mrts = 0
             for _, mrt in mrts_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                if distance <= 2:
+                if distance <= 5:
                     count_mrts += 1
                     pg_hook.run("""
                         INSERT INTO warehouse.int_nearest_mrts (flat_id, mrt_id, distance)
@@ -141,7 +141,7 @@ def hdb_pipeline():
                     """, parameters=(flat['id'], mrt['id'], distance))
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
-                SET num_mrts_within_2km = %s
+                SET num_mrts_within_3km = %s
                 WHERE id = %s
             """, parameters=[count_mrts, flat['id']])
         print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrts")
@@ -169,29 +169,50 @@ def hdb_pipeline():
     def generate_report():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT rp.*, m.mrt as nearest_mrt, nm.distance as dist_to_nearest_mrt
-            FROM warehouse.int_resale_prices rp
-            JOIN warehouse.int_nearest_mrts nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts m ON nm.mrt_id = m.id;
+            SELECT * FROM warehouse.int_resale_prices rp;
+        """)
+        resale_prices_mrt_df = pg_hook.get_pandas_df("""
+            SELECT 
+                rp.resale_price,
+                rp.floor_area_sqm, 
+                mrt_info.nearest_mrt, 
+                mrt_info.dist_to_nearest_mrt
+            FROM 
+                warehouse.int_resale_prices rp
+            JOIN (
+                SELECT 
+                    nm.flat_id, 
+                    m.mrt AS nearest_mrt, 
+                    nm.distance AS dist_to_nearest_mrt
+                FROM 
+                    warehouse.int_nearest_mrts nm
+                INNER JOIN warehouse.int_mrts m ON nm.mrt_id = m.id
+                WHERE nm.distance = (
+                    SELECT MIN(distance)
+                    FROM warehouse.int_nearest_mrts
+                    WHERE flat_id = nm.flat_id
+                )
+            ) AS mrt_info ON rp.id = mrt_info.flat_id;
         """)
         # Clean and standardise data
         resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
+        resale_prices_mrt_df = clean_resale_prices_for_visualisation(resale_prices_mrt_df)
         # Generate plots
-        plot_all(resale_prices_df)
+        plot_default_features(resale_prices_df)
+        plot_mrt_info(resale_prices_mrt_df)
         # Paste images in report
         consolidate_report()
        
-
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
-    get_mrts_within_2km_ = get_mrts_within_2km()
+    get_mrts_within_3km_ = get_mrts_within_3km()
     get_dist_from_cbd_ = get_dist_from_cbd()
     enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
     generate_report_ = generate_report()
     # Pipeline order
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
     scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_2km_ >> get_dist_from_cbd_
+    create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_3km_ >> get_dist_from_cbd_
     get_dist_from_cbd_ >> generate_report_
 
 hdb_pipeline_dag = hdb_pipeline()

@@ -30,7 +30,7 @@ def consolidate_report():
     c.save()
     print(f"PDF report saved to {PDF_PATH}")
 
-def plot_all(df):
+def plot_default_features(df):
 
     def plot_real_prices(df: pd.DataFrame):
         _, ax = plt.subplots()
@@ -119,19 +119,46 @@ def plot_all(df):
         save_plot_as_image(plt, 'remaining_lease')
         plt.close()
     
-    def plot_proximity_to_mrt(df):
+    def plot_proximity_to_mrts(df):
         _, ax = plt.subplots() 
-        grouped_data = df.groupby('num_mrts_within_2km')['resale_price'].mean()
+        grouped_data = df.groupby('num_mrts_within_3km')['resale_price'].mean()
         grouped_data.plot(kind='line')
         ax.set_xlabel('Number of MRT Stations within 2 km')
         ax.set_ylabel('Average Resale Price (SGD)')
-        save_plot_as_image(plt, 'num_mrts_within_2km')
+        save_plot_as_image(plt, 'num_mrts_within_3km')
         plt.close()
+        plot_real_prices(df)
+        plot_floor_area_distribution(df)
+        plot_price_distribution_by_town(df)
+        plot_avg_price_per_sqm_by_town_flat_type(df)
+        plot_lease_commencement_date(df)
+        plot_remaining_lease(df)
+        plot_proximity_to_mrts(df)
 
-    plot_real_prices(df)
-    plot_floor_area_distribution(df)
-    plot_price_distribution_by_town(df)
-    plot_avg_price_per_sqm_by_town_flat_type(df)
-    plot_lease_commencement_date(df)
-    plot_remaining_lease(df)
-    plot_proximity_to_mrt(df)
+def plot_mrt_info(df):
+    def plot_distance_to_mrt(df):
+        _, ax = plt.subplots() 
+        # Aggregated scatter plot with mean resale price for binned distance ranges
+        bins = pd.cut(df['dist_to_nearest_mrt'], bins=np.arange(0, df['dist_to_nearest_mrt'].max() + 0.1, 0.1))
+        grouped = df.groupby(bins)['resale_price'].mean().reset_index()
+        # Get the mid-point of each interval for plotting
+        grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
+        plt.scatter(grouped['dist_mid'], grouped['resale_price'], alpha=0.6)
+        ax.set_xlabel('Distance to Nearest MRT (km)')
+        ax.set_ylabel('Average Resale Price (SGD)')
+        save_plot_as_image(plt, 'dist_to_nearest_mrt')
+        plt.close()
+    
+    def plot_different_mrts(df):
+        _, ax = plt.subplots() 
+        average_prices_by_mrt = df.groupby('nearest_mrt')['resale_price'].mean().sort_values(ascending=False)
+        plt.figure(figsize=(15, 7))
+        average_prices_by_mrt.plot(kind='bar')
+        ax.set_xlabel('Nearest MRT Station')
+        ax.set_ylabel('Average Resale Price (SGD)')
+        plt.xticks(rotation=90)
+        save_plot_as_image(plt, 'different_mrt_prices')
+        plt.show()
+
+    plot_distance_to_mrt(df)
+    plot_different_mrts(df)

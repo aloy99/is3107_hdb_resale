@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
-    id INT NOT NULL,
+    id SERIAL PRIMARY KEY,
     transaction_month DATE,
     town TEXT,
     flat_type TEXT,
@@ -15,6 +15,6 @@ CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     postal TEXT,
     longitude FLOAT,
     latitude FLOAT,
-    num_mrts_within_2km INT,
+    num_mrts_within_3km INT,
     distance_from_cbd FLOAT
 )
