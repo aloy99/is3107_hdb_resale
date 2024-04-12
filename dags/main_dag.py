@@ -13,7 +13,7 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
 from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.utils import consolidate_report, plot_real_prices, plot_floor_area_distribution
+from reporting.utils import consolidate_report, plot_real_prices, plot_floor_area_distribution, plot_price_distribution_by_town, plot_avg_price_per_sqm_by_town_flat_type
 
 default_args = {
     "owner": "airflow",
@@ -174,6 +174,8 @@ def hdb_pipeline():
         # Generate plots
         plot_real_prices(resale_prices_df)
         plot_floor_area_distribution(resale_prices_df)
+        plot_price_distribution_by_town(resale_prices_df)
+        plot_avg_price_per_sqm_by_town_flat_type(resale_prices_df)
         # Paste images in report
         consolidate_report()
        
