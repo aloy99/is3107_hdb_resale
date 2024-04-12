@@ -13,8 +13,8 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
 from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.constants import PDF_PATH, IMAGE_PATHS
-from reporting.utils import plot_real_prices, add_image_to_pdf
+from reporting.utils import consolidate_report, plot_all
+from data_preparation.utils import clean_resale_prices_for_visualisation
 
 default_args = {
     "owner": "airflow",
@@ -33,7 +33,7 @@ def daily_hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
+        data_gov_scraper = DataGovScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
@@ -144,15 +144,17 @@ def daily_hdb_pipeline():
     def generate_report():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT transaction_month, resale_price, real_resale_price
-            FROM warehouse.int_resale_prices;
+            SELECT rp.*, m.mrt as nearest_mrt, nm.distance as dist_to_nearest_mrt
+            FROM warehouse.int_resale_prices rp
+            JOIN warehouse.int_nearest_mrts nm ON rp.id = nm.flat_id
+            JOIN warehouse.int_mrts m ON nm.mrt_id = m.id;
         """)
+        # Clean and standardise data
+        resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
         # Generate plots
-        plot_real_prices(resale_prices_df)
-        # Add plots to pdf report
-        for key in IMAGE_PATHS:
-            add_image_to_pdf(IMAGE_PATHS[key], PDF_PATH, title='Resale Prices Report')
-        print(f"PDF report saved to {PDF_PATH}")
+        plot_all(resale_prices_df)
+        # Paste images in report
+        consolidate_report()
        
 
     # Run tasks

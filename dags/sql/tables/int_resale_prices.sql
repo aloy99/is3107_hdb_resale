@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
-    id TEXT NOT NULL,
+    id INT NOT NULL,
     transaction_month DATE,
     town TEXT,
     flat_type TEXT,
