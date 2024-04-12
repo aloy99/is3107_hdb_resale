@@ -22,6 +22,10 @@ IMAGE_PATHS = {
     'remaining_lease': {
         'title': 'Average Resale Price Per Sqm Over Remaining Lease',
         'path': './remaining_lease.png'
+    },
+    'num_mrts_within_2km': {
+        'title': 'Average Resale Price by Number of Nearby MRT Stations',
+        'path': './num_mrts_within_2km.png'
     }
 }
 PDF_PATH = './report.pdf'

@@ -118,6 +118,15 @@ def plot_all(df):
         ax.set_ylabel('Average Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'remaining_lease')
         plt.close()
+    
+    def plot_proximity_to_mrt(df):
+        _, ax = plt.subplots() 
+        grouped_data = df.groupby('num_mrts_within_2km')['resale_price'].mean()
+        grouped_data.plot(kind='line')
+        ax.set_xlabel('Number of MRT Stations within 2 km')
+        ax.set_ylabel('Average Resale Price (SGD)')
+        save_plot_as_image(plt, 'num_mrts_within_2km')
+        plt.close()
 
     plot_real_prices(df)
     plot_floor_area_distribution(df)
@@ -125,3 +134,4 @@ def plot_all(df):
     plot_avg_price_per_sqm_by_town_flat_type(df)
     plot_lease_commencement_date(df)
     plot_remaining_lease(df)
+    plot_proximity_to_mrt(df)
