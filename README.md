@@ -5,7 +5,7 @@
 
 ## Docker Containers
 To exec into docker container
-```docker exec -it <<container_id>> bash```
+```docker exec -it -u airflow <<container_id>> bash```
 
 ## Using Postgres
 To exec into postgres docker container
