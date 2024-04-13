@@ -40,6 +40,6 @@ def clean_resale_prices_for_visualisation(df):
             return row
         df = df.apply(impute_remaining_lease, axis=1)
         print("Standarised and imputed remaining lease values.\n", df.info())
-
+            
     # Returned cleaned data
     return df

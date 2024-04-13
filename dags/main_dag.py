@@ -9,7 +9,7 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 import pandas as pd
 
 from common.columns import TABLE_META
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS
+from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, PROXIMITY_RADIUS
 from common.utils import calc_dist
 from scraper.datagov.datagov_scraper import DataGovScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
@@ -133,18 +133,23 @@ def hdb_pipeline():
             count_mrts = 0
             for _, mrt in mrts_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                if distance <= 5:
+                min_dist = None
+                if distance <= PROXIMITY_RADIUS:
                     count_mrts += 1
+                    if min_dist is None or distance < min_dist:
+                        min_dist = distance
+                # Persist details of nearest mrt to this flat
+                if min_dist:
                     pg_hook.run("""
-                        INSERT INTO warehouse.int_nearest_mrts (flat_id, mrt_id, distance)
+                        INSERT INTO warehouse.int_nearest_mrt (flat_id, mrt_id, distance)
                         VALUES (%s, %s, %s)
-                    """, parameters=(flat['id'], mrt['id'], distance))
+                    """, parameters=(flat['id'], mrt['id'], min_dist))
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
                 SET num_mrts_within_radius = %s
                 WHERE id = %s
             """, parameters=[count_mrts, flat['id']])
-        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrts")
+        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrt")
 
     @task
     def get_dist_from_cbd():
@@ -169,27 +174,14 @@ def hdb_pipeline():
     def process_data():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            WITH NearestMRT AS (
-                SELECT 
-                    nm.flat_id, 
-                    m.mrt AS nearest_mrt, 
-                    nm.distance AS dist_to_nearest_mrt
-                FROM 
-                    warehouse.int_nearest_mrts nm
-                INNER JOIN warehouse.int_mrts m ON nm.mrt_id = m.id
-                WHERE nm.distance = (
-                    SELECT MIN(distance)
-                    FROM warehouse.int_nearest_mrts
-                    WHERE flat_id = nm.flat_id
-                )
-            )
             SELECT 
                 rp.*, 
-                NearestMRT.nearest_mrt, 
-                NearestMRT.dist_to_nearest_mrt
+                mrts.mrt AS nearest_mrt, 
+                nm.distance AS dist_to_nearest_mrt
             FROM 
                 warehouse.int_resale_prices rp
-            JOIN NearestMRT ON rp.id = NearestMRT.flat_id;
+            LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
+            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.mrt_id;
         """)
         # Clean and standardise data
         resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)

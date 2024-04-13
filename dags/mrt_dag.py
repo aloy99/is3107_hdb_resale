@@ -47,10 +47,10 @@ def mrt_pipeline():
         sql = "sql/tables/int_mrts.sql"
     )
 
-    create_int_nearest_mrts = PostgresOperator(
-        task_id = "create_int_nearest_mrts",
+    create_int_nearest_mrt = PostgresOperator(
+        task_id = "create_int_nearest_mrt",
         postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_nearest_mrts.sql"
+        sql = "sql/tables/int_nearest_mrt.sql"
     )
 
     @task
@@ -89,7 +89,7 @@ def mrt_pipeline():
         print("committed mrt data into warehouse")
         
     scrape_mrt_data_ = scrape_mrt_data()
-    create_pg_stg_schema >> create_pg_warehouse_schema >> create_stg_resale_price >> create_int_mrts >> create_int_nearest_mrts >> scrape_mrt_data_ 
+    create_pg_stg_schema >> create_pg_warehouse_schema >> create_stg_resale_price >> create_int_mrts >> create_int_nearest_mrt >> scrape_mrt_data_ 
     scrape_mrt_data_ >> scrape_mrt_location_data(scrape_mrt_data_)
 
 mrt_pipeline_dag = mrt_pipeline()

@@ -24,15 +24,15 @@ IMAGE_PATHS = {
         'path': './remaining_lease.png'
     },
     'num_mrts_within_radius': {
-        'title': 'Average Resale Price by Number of Nearby MRT Stations',
+        'title': 'Average Price Per Sqm by Number of Nearby MRT Stations',
         'path': './num_mrts_within_radius.png'
     },
     'dist_to_nearest_mrt': {
-        'title': 'Resale Price vs. Distance to Nearest MRT',
+        'title': 'Top and Bottom MRT Stations by Average Price Per Sqm (within 2km)',
         'path': './dist_to_nearest_mrt.png'
     },
     'different_mrt_prices': {
-        'title': 'Average Resale Price by Nearest MRT Station',
+        'title': 'Average Price Per Sqm by Nearest MRT Station',
         'path': './different_mrt_prices.png'
     }
 }

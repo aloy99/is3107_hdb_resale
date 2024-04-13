@@ -6,6 +6,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
 from reporting.constants import IMAGE_PATHS, PDF_PATH, TOP_OF_PAGE_Y, LOWEST_POSITION_Y, CHART_HEIGHT, CHART_WIDTH, CHART_GAP, TITLE_GAP
+from common.constants import PROXIMITY_RADIUS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
@@ -123,8 +124,9 @@ def plot_default_features(df):
         _, ax = plt.subplots() 
         grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].mean()
         grouped_data.plot(kind='line')
-        ax.set_xlabel('Number of MRT Stations within 5')
+        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
         ax.set_ylabel('Average Price Per Sqm (SGD)')
+        plt.suptitle('')  # Suppress the automatic title
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
 
@@ -140,8 +142,9 @@ def plot_mrt_info(df):
     def plot_distance_to_mrt(df):
         _, ax = plt.subplots() 
         # Aggregated scatter plot to reduce noise
-        bins = pd.cut(df['dist_to_nearest_mrt'], bins=np.arange(0, df['dist_to_nearest_mrt'].max() + 0.1, 0.1))
-        grouped = df.groupby(bins)['price_per_sqm'].mean().reset_index()
+        df_filtered = df.dropna(subset=['nearest_mrt'])
+        bins = pd.cut(df_filtered['dist_to_nearest_mrt'], bins=np.arange(0, df_filtered['dist_to_nearest_mrt'].max() + 0.1, 0.1))
+        grouped = df_filtered.groupby(bins)['price_per_sqm'].mean().reset_index()
         # Get the mid-point of each interval for plotting
         grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
         plt.scatter(grouped['dist_mid'], grouped['price_per_sqm'], alpha=0.6)
@@ -152,9 +155,16 @@ def plot_mrt_info(df):
     
     def plot_different_mrts(df):
         _, ax = plt.subplots() 
-        average_prices_by_mrt = df.groupby('nearest_mrt')['price_per_sqm'].mean().sort_values(ascending=False)
-        plt.figure(figsize=(15, 7))
-        average_prices_by_mrt.plot(kind='bar')
+        df_filtered = df[df['dist_to_nearest_mrt'].notnull() & (df['dist_to_nearest_mrt'] < 2)]
+        # Group by 'nearest_mrt' and calculate mean 'price_per_sqm', then sort by values
+        average_prices_by_mrt = df_filtered.groupby('nearest_mrt')['price_per_sqm'].mean().sort_values(ascending=False)
+        # Sort values and select the top n and bottom n
+        n = 8
+        top_mrts = average_prices_by_mrt.nlargest(n)
+        bottom_mrts = average_prices_by_mrt.nsmallest(n)
+        combined_mrts = pd.concat([top_mrts, bottom_mrts]).sort_values()
+        # Plot
+        combined_mrts.plot(kind='bar')
         ax.set_xlabel('Nearest MRT Station')
         ax.set_ylabel('Average Price Per Sqm (SGD)')
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
