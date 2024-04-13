@@ -8,3 +8,4 @@ CREATE TABLE IF NOT EXISTS warehouse.int_nearest_mrts (
 );
 CREATE INDEX idx_flat_id ON warehouse.int_nearest_mrts(flat_id);
 CREATE INDEX idx_mrt_id ON warehouse.int_nearest_mrts(mrt_id);
+CREATE INDEX idx_distance ON warehouse.int_nearest_mrts(distance);

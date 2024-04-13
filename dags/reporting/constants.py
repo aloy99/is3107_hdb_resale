@@ -23,9 +23,9 @@ IMAGE_PATHS = {
         'title': 'Average Resale Price Per Sqm Over Remaining Lease',
         'path': './remaining_lease.png'
     },
-    'num_mrts_within_3km': {
+    'num_mrts_within_radius': {
         'title': 'Average Resale Price by Number of Nearby MRT Stations',
-        'path': './num_mrts_within_3km.png'
+        'path': './num_mrts_within_radius.png'
     },
     'dist_to_nearest_mrt': {
         'title': 'Resale Price vs. Distance to Nearest MRT',
