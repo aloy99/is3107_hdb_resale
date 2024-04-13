@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
+from airflow.operators.email_operator import EmailOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 
@@ -13,7 +14,7 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, P
 from common.utils import calc_dist
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info
+from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info, create_html_report
 from data_preparation.utils import clean_resale_prices_for_visualisation
 
 default_args = {
@@ -194,7 +195,15 @@ def hdb_pipeline():
         plot_default_features(df)
         plot_mrt_info(df)
         # Paste images in report
-        consolidate_report()
+        return create_html_report()
+
+    # image_mail = EmailOperator(
+    #     task_id="email_report",
+    #     to=['e0560270@u.nus.edu'],
+    #     subject='Resale Price Report',
+    #     html_content='{{ ti.xcom_pull(task_ids="generate_report") }}'
+    #     # provide_context=True
+    # )
        
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
@@ -207,6 +216,6 @@ def hdb_pipeline():
     create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
     scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
     create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_dist_from_cbd_
-    get_dist_from_cbd_ >> processed_data >>  generate_report_
+    get_dist_from_cbd_ >> processed_data >>  generate_report_# >> image_mail
 
 hdb_pipeline_dag = hdb_pipeline()
