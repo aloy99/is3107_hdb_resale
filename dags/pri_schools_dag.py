@@ -2,7 +2,6 @@ from contextlib import closing
 from datetime import datetime, timedelta
 
 from airflow.decorators import dag, task
-from airflow.operators.python import get_current_context
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 
@@ -115,11 +114,11 @@ def pri_school_pipeline():
         print(pd.DataFrame(records))
     
     # Run tasks
-    scrape_resale_prices_ = scrape_pri_schools()
-    enhance_resale_price_coords_ = enhance_pri_school_coords(scrape_resale_prices_)
+    scrape_parks_ = scrape_pri_schools()
+    enhance_resale_price_coords_ = enhance_pri_school_coords(scrape_parks_)
     # Pipeline order
-    create_pg_stg_schema >> create_stg_pri_schools >> scrape_resale_prices_
-    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
+    create_pg_stg_schema >> create_stg_pri_schools >> scrape_parks_
+    scrape_parks_ >> create_pg_warehouse_schema >> create_int_resale_price 
     create_int_resale_price >> enhance_resale_price_coords_ 
 
 pri_school_pipeline_dag = pri_school_pipeline()
