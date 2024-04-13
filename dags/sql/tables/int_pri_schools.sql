@@ -10,4 +10,4 @@ CREATE TABLE IF NOT EXISTS warehouse.int_pri_schools(
     longitude FLOAT,
     latitude FLOAT
 );
-CREATE INDEX idx_school_name ON warehouse.int_pri_schools(school_name);
+CREATE INDEX IF NOT EXISTS idx_school_name ON warehouse.int_pri_schools(school_name);

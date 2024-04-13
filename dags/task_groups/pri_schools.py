@@ -1,30 +1,16 @@
 from contextlib import closing
-from datetime import datetime, timedelta
 
-from airflow.decorators import dag, task
+from airflow.decorators import dag, task, task_group
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 import pandas as pd
 
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS
 from scraper.datagov.pri_school_scraper import PriSchoolScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 from scraper.datagov.constants import PRIMARY_SCHOOL_FIELDS
 
-default_args = {
-    "owner": "airflow",
-    "start_date": datetime(2024, 1, 1),
-    "email": ["airflow@example.com"],
-    "email_on_failure": False,
-    "email_on_retry": False,
-    "retries": 3,
-    "retry_delay": timedelta(minutes=10)
-}
-
-@dag(dag_id='pri_schools_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['pri_schools_dag'], template_searchpath=["/opt/airflow/"])
-def pri_school_pipeline():
-
+@task_group(group_id = "pri_school")
+def pri_school_tasks():
     @task
     def scrape_pri_schools():
         resale_price_scraper = PriSchoolScraper({})
@@ -89,9 +75,7 @@ def pri_school_pipeline():
         print(pd.DataFrame(records))
     
     # Run tasks
-    scrape_parks_ = scrape_pri_schools()
-    enhance_pri_price_coords_ = enhance_pri_school_coords(scrape_parks_)
+    scrape_pri_schools_ = scrape_pri_schools()
+    enhance_pri_price_coords_ = enhance_pri_school_coords(scrape_pri_schools_)
     # Pipeline order
-    scrape_parks_ >> enhance_pri_price_coords_ 
-
-pri_school_pipeline_dag = pri_school_pipeline()
+    scrape_pri_schools_ >> enhance_pri_price_coords_ 
