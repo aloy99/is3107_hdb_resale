@@ -178,6 +178,7 @@ def hdb_pipeline():
             SELECT 
                 rp.*, 
                 mrts.mrt AS nearest_mrt, 
+                nm.num_mrts_within_radius as num_mrts_within_radius,
                 nm.distance AS dist_to_nearest_mrt
             FROM 
                 warehouse.int_resale_prices rp
