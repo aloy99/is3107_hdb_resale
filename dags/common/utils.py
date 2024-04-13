@@ -10,3 +10,8 @@ def calc_dist(coord1, coord2):
     c = 2 * math.asin(math.sqrt(a)) 
     r = 6371 # Radius of earth in kilometers. Use 3956 for miles
     return c * r
+
+def snake_case_to_normal_case(snake_str):
+    words = snake_str.split('_')
+    words[0] = words[0].capitalize()  # Capitalize the first letter
+    return ' '.join(words)

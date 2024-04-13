@@ -20,3 +20,14 @@ RESALE_PRICE_FIELDS = [
     "remaining_lease",
     "resale_price"]
 
+PRIMARY_SCHOOL_DATASET_ID = "d_688b934f82c1059ed0a6993d2a829089"
+PRIMARY_SCHOOL_FIELDS = [
+    "school_name",
+    "postal_code",
+    "type_code",
+    "nature_code",
+    "sap_ind",
+    "autonomous_ind",
+    "gifted_ind",
+]
+
