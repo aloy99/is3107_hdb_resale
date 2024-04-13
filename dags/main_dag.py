@@ -17,6 +17,8 @@ from scraper.onemap.onemap_scraper import OnemapScraper
 from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info, create_html_report
 from data_preparation.utils import clean_resale_prices_for_visualisation
 
+from task_groups.report import report_tasks
+
 default_args = {
     "owner": "airflow",
     "start_date": datetime(2024, 1, 1),
@@ -147,48 +149,15 @@ def hdb_pipeline():
             """, parameters=[dist_from_cbd, flat['id']])
         print("Updated distance to CBD")
 
-    @task
-    def process_data():
-        pg_hook = PostgresHook("resale_price_db")
-        resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT 
-                rp.*, 
-                mrts.mrt AS nearest_mrt, 
-                nm.num_mrts_within_radius as num_mrts_within_radius,
-                nm.distance AS dist_to_nearest_mrt
-            FROM 
-                warehouse.int_resale_prices rp
-            LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.nearest_mrt_id;
-        """)
-        # Clean and standardise data
-        resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
-        return resale_prices_df
-    
-    @task
-    def generate_report(df):
-        plot_default_features(df)
-        plot_mrt_info(df)
-        # Paste images in report
-        return create_html_report()
-
-    # image_mail = EmailOperator(
-    #     task_id="email_report",
-    #     to=['e0560270@u.nus.edu'],
-    #     subject='Resale Price Report',
-    #     html_content='{{ ti.xcom_pull(task_ids="generate_report") }}'
-    #     # provide_context=True
-    # )
-       
+ 
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
     enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
     get_mrts_within_radius_ = get_mrts_within_radius()
     get_dist_from_cbd_ = get_dist_from_cbd()
-    processed_data = process_data()
-    generate_report_ = generate_report(processed_data)
+
     # Pipeline order
     scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_dist_from_cbd_
-    get_dist_from_cbd_ >> processed_data >>  generate_report_# >> image_mail
+    get_dist_from_cbd_ >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()
