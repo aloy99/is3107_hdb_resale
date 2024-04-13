@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
+import base64
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-from reporting.constants import IMAGE_PATHS, PDF_PATH, TOP_OF_PAGE_Y, LOWEST_POSITION_Y, CHART_HEIGHT, CHART_WIDTH, CHART_GAP, TITLE_GAP
+from reporting.constants import IMAGE_PATHS, PDF_PATH, TOP_OF_PAGE_Y, LOWEST_POSITION_Y, CHART_HEIGHT, CHART_WIDTH, CHART_GAP, TITLE_GAP, HTML_START, HTML_END, PLOT_TEMPLATE
 from common.constants import PROXIMITY_RADIUS
 
 def save_plot_as_image(plt, plot_name):
@@ -30,6 +32,18 @@ def consolidate_report():
         y_position -= CHART_HEIGHT + CHART_GAP  # Move down the position for the next image. Adjust as needed.
     c.save()
     print(f"PDF report saved to {PDF_PATH}")
+
+def create_html_report():
+    report_body = HTML_START.format(date = datetime.today().strftime('%Y-%m-%d')).strip()
+    for item in IMAGE_PATHS.values():
+        data_uri = base64.b64encode(open(item['path'], 'rb').read()).decode('utf-8')
+        img_tag = '<img src="data:image/png;base64,{0}">'.format(data_uri)
+        curr_row = PLOT_TEMPLATE.format(image = img_tag, caption = item['title'])
+        report_body += curr_row
+    report_body += HTML_END.strip()
+    with open('test.html', 'w') as f:
+        f.write(report_body.replace('\n',''))
+    return report_body.replace('\n','')
 
 def plot_default_features(df):
 
