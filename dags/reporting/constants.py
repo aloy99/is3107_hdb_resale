@@ -28,11 +28,11 @@ IMAGE_PATHS = {
         'path': './num_mrts_within_radius.png'
     },
     'dist_to_nearest_mrt': {
-        'title': 'Top and Bottom MRT Stations by Average Price Per Sqm (within 2km)',
+        'title': 'Price Per Sqm vs. Distance to Nearest MRT',
         'path': './dist_to_nearest_mrt.png'
     },
     'different_mrt_prices': {
-        'title': 'Average Price Per Sqm by Nearest MRT Station',
+        'title': 'Top and Bottom MRT Stations by Average Price Per Sqm (within 2km)',
         'path': './different_mrt_prices.png'
     }
 }
