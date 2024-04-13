@@ -1,14 +1,27 @@
 import requests
 import pandas as pd
+from bs4 import BeautifulSoup
+import requests
+import pandas as pd
+import re
 from scraper.amenities.constants import MRT_OPENING_DATES_URL
 from scraper.onemap.onemap_scraper import OnemapScraper
 
 def get_mrt_opening_dates():
     response = requests.get(MRT_OPENING_DATES_URL)
     if response.status_code == 200:
-        mrt_dates = response.json()
-        print("Retrieved MRT data!\n", mrt_dates)
-        return pd.DataFrame(list(mrt_dates.items()), columns=['mrt', 'opening_date'])
+        soup = BeautifulSoup(response.content, 'html.parser')
+        mrt_table = soup.find('table',{'class':"sortable"})
+        df = pd.read_html(str(mrt_table))[0]
+        df.columns = df.columns.droplevel(0)
+        df = df.rename_axis(None, axis=1)
+        df = df[df['English • Malay'] != df['Chinese']]
+        df = df.rename(columns = {'English • Malay': 'mrt', 'Opening': 'opening_date'})[['mrt','opening_date']]
+        df['mrt'] = df['mrt'].transform(lambda x: x.split('•')[0].strip())
+        df['opening_date'] = df['opening_date'].transform(lambda x: pd.to_datetime(re.sub("\[[0-9]+\]", '', x), format="%d %B %Y", errors="coerce"))
+        df = df.dropna(subset = ['opening_date'])
+        df = df[df['opening_date'] < pd.Timestamp.now()]
+        return df
     else:
         print(f"Failed to retrieve MRT opening dates: {response.status_code}")
         return None

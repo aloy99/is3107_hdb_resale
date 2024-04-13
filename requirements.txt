@@ -6,3 +6,4 @@ apache-airflow-providers-postgres
 reportlab
 matplotlib
 scipy
+html5lib
