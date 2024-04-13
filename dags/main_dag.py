@@ -119,9 +119,11 @@ def hdb_pipeline():
         pg_hook = PostgresHook("resale_price_db")
         # Fetch the recent resale price entries
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT id, latitude, longitude
-            FROM warehouse.int_resale_prices
-            WHERE num_mrts_within_radius IS NULL;
+            SELECT rp.id, rp.latitude, rp.longitude
+            FROM warehouse.int_resale_prices rp
+            LEFT JOIN warehouse.int_nearest_mrt np 
+            ON rp.id = np.flat_id
+            WHERE np.flat_id IS NULL;
         """)
 
         mrts_df = pg_hook.get_pandas_df("""
@@ -141,15 +143,13 @@ def hdb_pipeline():
                 # Persist details of nearest mrt to this flat
                 if min_dist:
                     pg_hook.run("""
-                        INSERT INTO warehouse.int_nearest_mrt (flat_id, mrt_id, distance)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT DO NOTHING
-                    """, parameters=(flat['id'], mrt['id'], min_dist))
-            pg_hook.run("""
-                UPDATE warehouse.int_resale_prices
-                SET num_mrts_within_radius = %s
-                WHERE id = %s
-            """, parameters=[count_mrts, flat['id']])
+                        INSERT INTO warehouse.int_nearest_mrt (flat_id, nearest_mrt_id, num_mrts_within_radius, distance)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (flat_id) DO UPDATE 
+                        SET nearest_mrt_id = EXCLUDED.nearest_mrt_id, 
+                            num_mrts_within_radius = EXCLUDED.num_mrts_within_radius, 
+                            distance = EXCLUDED.distance;
+                    """, parameters=(flat['id'], mrt['id'], count_mrts, min_dist))
         print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrt")
 
     @task
@@ -182,7 +182,7 @@ def hdb_pipeline():
             FROM 
                 warehouse.int_resale_prices rp
             LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.mrt_id;
+            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.nearest_mrt_id;
         """)
         # Clean and standardise data
         resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
