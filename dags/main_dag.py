@@ -11,7 +11,7 @@ import pandas as pd
 from common.columns import TABLE_META
 from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, PROXIMITY_RADIUS
 from common.utils import calc_dist
-from scraper.datagov.datagov_scraper import DataGovScraper
+from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info
 from data_preparation.utils import clean_resale_prices_for_visualisation
@@ -45,10 +45,10 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        data_gov_scraper = DataGovScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
+        resale_price_scraper = ResalePriceScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
-        for idx, rows in enumerate(data_gov_scraper.run_scrape(date), start=0):
+        for idx, rows in enumerate(resale_price_scraper.run_scrape(date), start=0):
             if DEV_MODE and idx == DEV_REDUCED_ROWS: break
             # necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
             with closing(pg_hook.get_conn()) as conn:
@@ -143,6 +143,7 @@ def hdb_pipeline():
                     pg_hook.run("""
                         INSERT INTO warehouse.int_nearest_mrt (flat_id, mrt_id, distance)
                         VALUES (%s, %s, %s)
+                        ON CONFLICT DO NOTHING
                     """, parameters=(flat['id'], mrt['id'], min_dist))
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices

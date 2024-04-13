@@ -17,7 +17,7 @@ from scraper.datagov.constants import (
 
 logger = logging.getLogger(__name__)
 
-class DataGovScraper(BaseScraper):
+class ResalePriceScraper(BaseScraper):
 
     def __init__(self, headers: Mapping[str, str], mode: str):
         super().__init__("", "", headers)
