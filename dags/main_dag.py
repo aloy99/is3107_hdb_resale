@@ -30,18 +30,6 @@ default_args = {
 @dag(dag_id='hdb_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
 def hdb_pipeline():
 
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_stg_resale_price = PostgresOperator(
-        task_id = "create_stg_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_resale_prices.sql"
-    )
-
     @task
     def scrape_resale_prices():
         context = get_current_context()
@@ -70,19 +58,6 @@ def hdb_pipeline():
                         first_id = first_id if first_id else curr_id
                         first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
-        
-
-    create_pg_warehouse_schema = PostgresOperator(
-        task_id = "create_pg_warehouse_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
-    )
-
-    create_int_resale_price = PostgresOperator(
-        task_id = "create_int_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_resale_prices.sql"
-    )
 
     @task
     def enhance_resale_price_coords(min_id: int):
@@ -213,9 +188,7 @@ def hdb_pipeline():
     processed_data = process_data()
     generate_report_ = generate_report(processed_data)
     # Pipeline order
-    create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
-    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_dist_from_cbd_
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_dist_from_cbd_
     get_dist_from_cbd_ >> processed_data >>  generate_report_# >> image_mail
 
 hdb_pipeline_dag = hdb_pipeline()

@@ -25,18 +25,6 @@ default_args = {
 @dag(dag_id='parks_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['parks_dag'], template_searchpath=["/opt/airflow/"])
 def pri_school_pipeline():
 
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_stg_parks = PostgresOperator(
-        task_id = "create_stg_parks",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_parks.sql"
-    )
-
     @task
     def scrape_parks():
         park_scraper = ParkScraper({})
@@ -51,6 +39,6 @@ def pri_school_pipeline():
     # Run tasks
     scrape_parks_ = scrape_parks()
     # Pipeline order
-    create_pg_stg_schema >> create_stg_parks >> scrape_parks_
+    scrape_parks_
 
 pri_school_pipeline_dag = pri_school_pipeline()

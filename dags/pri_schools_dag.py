@@ -25,18 +25,6 @@ default_args = {
 @dag(dag_id='pri_schools_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['pri_schools_dag'], template_searchpath=["/opt/airflow/"])
 def pri_school_pipeline():
 
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_stg_pri_schools = PostgresOperator(
-        task_id = "create_stg_pri_schools",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_pri_schools.sql"
-    )
-
     @task
     def scrape_pri_schools():
         resale_price_scraper = PriSchoolScraper({})
@@ -68,19 +56,6 @@ def pri_school_pipeline():
                         first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
         
-
-    create_pg_warehouse_schema = PostgresOperator(
-        task_id = "create_pg_warehouse_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
-    )
-
-    create_int_resale_price = PostgresOperator(
-        task_id = "create_int_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_pri_schools.sql"
-    )
-
     @task
     def enhance_pri_school_coords(min_id: int):
         if not min_id:
@@ -115,10 +90,8 @@ def pri_school_pipeline():
     
     # Run tasks
     scrape_parks_ = scrape_pri_schools()
-    enhance_resale_price_coords_ = enhance_pri_school_coords(scrape_parks_)
+    enhance_pri_price_coords_ = enhance_pri_school_coords(scrape_parks_)
     # Pipeline order
-    create_pg_stg_schema >> create_stg_pri_schools >> scrape_parks_
-    scrape_parks_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords_ 
+    scrape_parks_ >> enhance_pri_price_coords_ 
 
 pri_school_pipeline_dag = pri_school_pipeline()
