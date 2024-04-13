@@ -5,6 +5,8 @@ COLLECTIONS_ENDPOINT = "v2/public/api/collections/{}/metadata"
 DATASETS_META_ENDPOINT = "v2/public/api/datasets/{}/metadata"
 DATASETS_ENDPOINT = "api/action/datastore_search"
 
+DATAGOV_GEOJSON = 'https://firebasestorage.googleapis.com/v0/b/storeroom-eac25.appspot.com/o/Parks.geojson?alt=media&token=d48531ed-db36-4824-a0d2-5890ae82786c'
+
 
 RESALE_PRICE_COLLECTION_ID = 189
 RESALE_PRICE_FIELDS = [
@@ -29,5 +31,12 @@ PRIMARY_SCHOOL_FIELDS = [
     "sap_ind",
     "autonomous_ind",
     "gifted_ind",
+]
+
+PARK_DATASET_ID = "d_0542d48f0991541706b58059381a6eca"
+PARK_FIELDS = [
+    "name",
+    "latitude",
+    "longitude"
 ]
 
