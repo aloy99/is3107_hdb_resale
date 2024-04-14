@@ -34,6 +34,14 @@ IMAGE_PATHS = {
     'different_mrt_prices': {
         'title': 'Top and Bottom MRT Stations by Average Price Per Sqm (within 2km)',
         'path': './different_mrt_prices.png'
+    },
+    'dist_to_cbd_distribution': {
+        'title': 'Distribution of flats from CBD',
+        'path': './dist_to_cbd_distribution.png'
+    },
+    'dist_to_cbd': {
+        'title': 'Resale Price vs. Distance from CBD',
+        'path': './dist_to_cbd.png'
     }
 }
 PDF_PATH = './report.pdf'
