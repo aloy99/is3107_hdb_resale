@@ -1,37 +1,19 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
 from datetime import datetime
 
 import base64
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 
-from reporting.constants import IMAGE_PATHS, PDF_PATH, TOP_OF_PAGE_Y, LOWEST_POSITION_Y, CHART_HEIGHT, CHART_WIDTH, CHART_GAP, TITLE_GAP, HTML_START, HTML_END, PLOT_TEMPLATE
+from reporting.constants import IMAGE_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE
 from common.constants import PROXIMITY_RADIUS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
     plt.tight_layout()
     plt.savefig( IMAGE_PATHS[plot_name]['path'])
-
-def add_image_to_pdf(canvas, image_path, y_position, title=None):
-    if title:
-        canvas.drawString(CHART_GAP, y_position + TITLE_GAP, title)
-    canvas.drawImage(image_path, CHART_GAP, y_position, width=CHART_WIDTH, height=CHART_HEIGHT)
-
-def consolidate_report():
-    c = canvas.Canvas(PDF_PATH, pagesize=letter)
-    y_position = TOP_OF_PAGE_Y  # Start from top of page
-    for item in IMAGE_PATHS:
-        # Check if we need new page
-        if y_position < LOWEST_POSITION_Y:
-            c.showPage()
-            y_position = TOP_OF_PAGE_Y  # Reset position
-        add_image_to_pdf(c, IMAGE_PATHS[item]['path'], y_position, title= IMAGE_PATHS[item]['title'])
-        y_position -= CHART_HEIGHT + CHART_GAP  # Move down the position for the next image. Adjust as needed.
-    c.save()
-    print(f"PDF report saved to {PDF_PATH}")
 
 def create_html_report():
     report_body = HTML_START.format(date = datetime.today().strftime('%Y-%m-%d')).strip()
@@ -41,30 +23,39 @@ def create_html_report():
         curr_row = PLOT_TEMPLATE.format(image = img_tag, caption = item['title'])
         report_body += curr_row
     report_body += HTML_END.strip()
-    with open('test.html', 'w') as f:
+    with open(HTML_PATH, 'w') as f:
         f.write(report_body.replace('\n',''))
     return report_body.replace('\n','')
 
 def plot_default_features(df):
 
     def plot_real_prices(df: pd.DataFrame):
-        _, ax = plt.subplots()
+        _, ax = plt.subplots() 
         # Plot Unadjusted Prices
         df.groupby('transaction_month')['resale_price'].median().plot(ax=ax, color='#18bddd', label='Unadjusted for Inflation')
         # Plot Adjusted Prices
         df.groupby('transaction_month')['real_resale_price'].median().plot(ax=ax, color='#df9266', label='Adjusted for Inflation')
-        # Get limits of data.
+        # Format the x-axis to display dates nicely
+        years = mdates.YearLocator()  # Every year
+        years_fmt = mdates.DateFormatter('%Y')
+        ax.xaxis.set_major_locator(years)
+        ax.xaxis.set_major_formatter(years_fmt)
+        plt.xticks(rotation=45)  # Rotate x-ticks to prevent overlap
+        # Set axis labels and title
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Price in SGD ($)')
+        # Set limits with padding
         x_min, x_max = ax.get_xlim()
         y_min, y_max = ax.get_ylim()
-        # Apply the new limits with padding.
-        padding_factor = 0.1 
+        padding_factor = 0.05
         x_padding = (x_max - x_min) * padding_factor
         y_padding = (y_max - y_min) * padding_factor
         ax.set_xlim(x_min - x_padding, x_max + x_padding)
         ax.set_ylim(y_min - y_padding, y_max + y_padding)
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price in SGD ($)')
+        # Legend and layout
         ax.legend()
+        plt.tight_layout()
+        # Save the plot
         save_plot_as_image(plt, 'real_prices')
         plt.close()
 

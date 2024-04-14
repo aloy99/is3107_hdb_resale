@@ -44,14 +44,8 @@ IMAGE_PATHS = {
         'path': './dist_to_cbd.png'
     }
 }
-PDF_PATH = './report.pdf'
-TOP_OF_PAGE_Y = 200
-LOWEST_POSITION_Y = 100
-CHART_HEIGHT = 450
-CHART_WIDTH = 450
-CHART_GAP = 100
-TITLE_GAP = 10
 
+HTML_PATH = './report.html'
 HTML_START = '''
 <!DOCTYPE html>
 <html lang="en">

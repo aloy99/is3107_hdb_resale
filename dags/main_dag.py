@@ -14,8 +14,6 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, P
 from common.utils import calc_dist
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info, create_html_report
-from data_preparation.utils import clean_resale_prices_for_visualisation
 
 from task_groups.report import report_tasks
 
