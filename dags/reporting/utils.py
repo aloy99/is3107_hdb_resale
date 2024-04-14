@@ -144,6 +144,24 @@ def plot_default_features(df):
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
 
+    def plot_distance_to_cbd_distribution(df: pd.DataFrame):
+        _, ax = plt.subplots()
+        # Plot a histogram of the distances.
+        df['distance_from_cbd'].hist(bins=50, ax=ax, edgecolor='black')
+        ax.set_xlabel('Distance from CBD (km)')
+        ax.set_ylabel('Number of Properties')
+        save_plot_as_image(plt, 'dist_to_cbd_distribution')
+        plt.close()
+
+    def plot_price_vs_distance_to_cbd(df: pd.DataFrame):
+        _, ax = plt.subplots()
+        # Create a scatter plot of price vs. distance for properties within 50km from CBD.
+        ax.scatter(df['distance_from_cbd'], df['price_per_sqm'], alpha=0.6)
+        ax.set_xlabel('Distance from CBD (km)')
+        ax.set_ylabel('Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'dist_to_cbd')
+        plt.close()
+
     plot_real_prices(df)
     plot_floor_area_distribution(df)
     plot_price_distribution_by_town(df)
@@ -151,6 +169,8 @@ def plot_default_features(df):
     plot_lease_commencement_date(df)
     plot_remaining_lease(df)
     plot_proximity_to_mrts(df)
+    plot_distance_to_cbd_distribution(df)
+    plot_price_vs_distance_to_cbd(df)
 
 def plot_mrt_info(df):
     def plot_distance_to_mrt(df):
