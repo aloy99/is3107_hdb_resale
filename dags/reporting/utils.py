@@ -124,16 +124,6 @@ def plot_default_features(df):
         ax.set_ylabel('Average Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'remaining_lease')
         plt.close()
-    
-    def plot_proximity_to_mrts(df):
-        _, ax = plt.subplots() 
-        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].mean()
-        grouped_data.plot(kind='line')
-        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
-        plt.suptitle('')  # Suppress the automatic title
-        save_plot_as_image(plt, 'num_mrts_within_radius')
-        plt.close()
 
     def plot_distance_to_cbd_distribution(df: pd.DataFrame):
         _, ax = plt.subplots()
@@ -159,11 +149,20 @@ def plot_default_features(df):
     plot_avg_price_per_sqm_by_town_flat_type(df)
     plot_lease_commencement_date(df)
     plot_remaining_lease(df)
-    plot_proximity_to_mrts(df)
     plot_distance_to_cbd_distribution(df)
     plot_price_vs_distance_to_cbd(df)
 
 def plot_mrt_info(df):
+    def plot_proximity_to_mrts(df):
+        _, ax = plt.subplots() 
+        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].mean()
+        grouped_data.plot(kind='line')
+        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        plt.suptitle('')  # Suppress the automatic title
+        save_plot_as_image(plt, 'num_mrts_within_radius')
+        plt.close()
+
     def plot_distance_to_mrt(df):
         _, ax = plt.subplots() 
         # Aggregated scatter plot to reduce noise
@@ -196,5 +195,6 @@ def plot_mrt_info(df):
         save_plot_as_image(plt, 'different_mrt_prices')
         plt.show()
 
+    plot_proximity_to_mrts(df)
     plot_distance_to_mrt(df)
     plot_different_mrts(df)

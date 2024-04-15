@@ -15,7 +15,10 @@ def park_tasks():
                 INSERT INTO staging.stg_parks (park, latitude, longitude)
                 VALUES (%s, %s, %s) ON CONFLICT (park) DO NOTHING;
             """, parameters=(park['park'], park['latitude'], park['longitude']))
-
+            pg_hook.run("""
+                INSERT INTO warehouse.int_parks (park, latitude, longitude)
+                VALUES (%s, %s, %s) ON CONFLICT (park) DO NOTHING;
+            """, parameters=(park['park'], park['latitude'], park['longitude']))
     # Run tasks
     scrape_parks_ = scrape_parks()
     # Pipeline order

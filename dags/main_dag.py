@@ -165,12 +165,12 @@ def hdb_pipeline():
         """)
 
         for _, flat in resale_prices_df.iterrows():
-            count_schs = 0
+            count = 0
             for _, pri_sch in pri_school_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (pri_sch['latitude'], pri_sch['longitude']))
                 min_dist = None
                 if distance <= PROXIMITY_RADIUS:
-                    count_schs += 1
+                    count += 1
                     if min_dist is None or distance < min_dist:
                         min_dist = distance
                 # Persist details of nearest mrt to this flat
@@ -182,18 +182,57 @@ def hdb_pipeline():
                         SET nearest_pri_sch_id = EXCLUDED.nearest_pri_sch_id, 
                             num_pri_sch_within_radius = EXCLUDED.num_pri_sch_within_radius, 
                             nearest_distance = EXCLUDED.nearest_distance;
-                    """, parameters=(flat['id'], pri_sch['id'], count_schs, min_dist))
+                    """, parameters=(flat['id'], pri_sch['id'], count, min_dist))
         print("Inserted nearest Primary Schools for new resale prices into warehouse.int_nearest_pri_school")
+
+    @task
+    def get_parks_within_radius():
+        pg_hook = PostgresHook("resale_price_db")
+        # Fetch the recent resale price entries
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT rp.id, rp.latitude, rp.longitude
+            FROM warehouse.int_resale_prices rp
+            LEFT JOIN warehouse.int_nearest_park np 
+            ON rp.id = np.flat_id
+            WHERE np.flat_id IS NULL;
+        """)
+
+        parks_df = pg_hook.get_pandas_df("""
+            SELECT *
+            FROM warehouse.int_parks;
+        """)
+
+        for _, flat in resale_prices_df.iterrows():
+            count = 0
+            for _, park in parks_df.iterrows():
+                distance = calc_dist((flat['latitude'], flat['longitude']), (park['latitude'], park['longitude']))
+                min_dist = None
+                if distance <= PROXIMITY_RADIUS:
+                    count += 1
+                    if min_dist is None or distance < min_dist:
+                        min_dist = distance
+                # Persist details of nearest mrt to this flat
+                if min_dist:
+                    pg_hook.run("""
+                        INSERT INTO warehouse.int_nearest_park (flat_id, nearest_park_id, num_parks_within_radius, nearest_distance)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (flat_id) DO UPDATE 
+                        SET nearest_park_id = EXCLUDED.nearest_park_id, 
+                            num_parks_within_radius = EXCLUDED.num_parks_within_radius, 
+                            nearest_distance = EXCLUDED.nearest_distance;
+                    """, parameters=(flat['id'], park['id'], count, min_dist))
+        print("Inserted nearest Parks for new resale prices into warehouse.int_nearest_park")
 
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
     enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
     get_mrts_within_radius_ = get_mrts_within_radius()
     get_pri_schs_within_radius_ = get_pri_schs_within_radius()
+    get_parks_within_radius_ = get_parks_within_radius()
     get_dist_from_cbd_ = get_dist_from_cbd()
 
     # Pipeline order
-    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_dist_from_cbd_
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_dist_from_cbd_
     get_dist_from_cbd_ >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()
