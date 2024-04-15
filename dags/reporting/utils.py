@@ -157,46 +157,47 @@ def plot_default_features(df):
 
 def plot_mrt_info(df):
     def plot_proximity_to_mrts(df):
-        df_filtered = df[df['distance_to_mrt'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
-        # Group by flat, count the number of schools within the proximity radius
+        _, ax = plt.subplots() 
+        df_filtered = df[df['distance_to_mrt'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
         df_grouped = df_filtered.groupby('flat_id').agg(
             num_mrts_within_radius=('mrt_id', 'count'), 
             price_per_sqm=('price_per_sqm', 'mean') 
         ).reset_index()
-        _, ax = plt.subplots() 
-        # Further group by mean to reduce clutter
-        df_grouped.plot(kind='line')
+        # Use seaborn's boxplot to plot this data
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='num_mrts_within_radius', y='price_per_sqm', data=df_grouped)
         ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
-        plt.suptitle('')  # Suppress the automatic title
+        ax.set_xlabel('Average Price Per Sqm (SGD)')
+        plt.xticks(rotation=45)  # Rotate x-axis labels if they overlap
+        # Save the plot as an image
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
 
     def plot_distance_to_nearest_mrt(df):
         _, ax = plt.subplots() 
         nearest_mrts = df.groupby('flat_id').agg(
-            dist_to_nearest_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            distance_to_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            price_per_sqm=('price_per_sqm', 'mean')  # Average price per sqm
         ).reset_index()
-        # Aggregated scatter plot to reduce noise
-        bins = pd.cut(nearest_mrts['dist_to_nearest_mrt'], bins=np.arange(0, nearest_mrts['dist_to_nearest_mrt'].max() + 0.1, 0.1))
+        # Use quantile-based binning or user-defined intervals
+        bin_edges = np.quantile(nearest_mrts['distance_to_mrt'], np.linspace(0, 1, num=10))
+        bins = pd.cut(nearest_mrts['distance_to_mrt'], bins=bin_edges, include_lowest=True)
         grouped = nearest_mrts.groupby(bins)['price_per_sqm'].mean().reset_index()
-        # Get the mid-point of each interval for plotting
-        grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
-        # Scatter plot
+        grouped['dist_mid'] = grouped['distance_to_mrt'].apply(lambda x: x.mid)
         sns.scatterplot(x='dist_mid', y='price_per_sqm', data=grouped, alpha=0.6)
-        # Regression line
-        sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')        
+        sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')
         ax.set_xlabel('Distance to Nearest MRT (km)')
         ax.set_ylabel('Average Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_nearest_mrt')
-        plt.close()
+        plt.show()
 
     def plot_different_mrts(df):
         _, ax = plt.subplots() 
         df_filtered = df.groupby('flat_id').agg(
-            dist_to_nearest_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            distance_to_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            price_per_sqm=('price_per_sqm', 'mean') 
         ).reset_index()
-        df_filtered = df[df['dist_to_nearest_mrt'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
+        df_filtered = df[df['distance_to_mrt'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
         # Group by 'nearest_mrt' and calculate mean 'price_per_sqm', then sort by values
         average_prices_by_mrt = df_filtered.groupby('mrt')['price_per_sqm'].mean().sort_values(ascending=False)
         # Sort values and select the top n and bottom n
@@ -218,7 +219,7 @@ def plot_mrt_info(df):
 
 def plot_pri_sch_info(df):
     def plot_price_vs_schools(df):
-        df_filtered = df[df['distance_to_school'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
         # Group by flat, count the number of schools within the proximity radius
         df_grouped = df_filtered.groupby('flat_id').agg(
             num_pri_sch_within_radius=('pri_sch_id', 'count'), 

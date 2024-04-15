@@ -18,10 +18,12 @@ def report_tasks():
         """)
         mrt_prices_df = pg_hook.get_pandas_df("""
             SELECT 
+                rp.id as flat_id,
+                mrts.id as mrt_id,
                 rp.resale_price, 
                 rp.floor_area_sqm,
-                mrts.mrt AS nearest_mrt, 
-                nm.distance AS dist_to_nearest_mrt
+                mrts.mrt AS mrt, 
+                nm.distance AS distance_to_mrt
             FROM 
                 warehouse.int_resale_prices rp
             JOIN warehouse.int_nearest_mrts as nm ON rp.id = nm.flat_id
@@ -29,15 +31,16 @@ def report_tasks():
         """)
         pri_sch_prices_df = pg_hook.get_pandas_df("""
             SELECT
+                rp.id as flat_id,
                 rp.resale_price,
                 rp.floor_area_sqm,
                 ps.*,
+                nps.pri_sch_id,
                 nps.distance as distance_to_school
             FROM warehouse.int_resale_prices rp
             JOIN warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
             JOIN warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
         """)
-
         all_dfs = {
             'resale_prices': resale_prices_df,
             'mrt_prices': mrt_prices_df,
