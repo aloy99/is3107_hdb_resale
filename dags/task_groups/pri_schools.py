@@ -1,42 +1,16 @@
 from contextlib import closing
-from datetime import datetime, timedelta
 
-from airflow.decorators import dag, task
+from airflow.decorators import dag, task, task_group
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 import pandas as pd
 
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS
 from scraper.datagov.pri_school_scraper import PriSchoolScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 from scraper.datagov.constants import PRIMARY_SCHOOL_FIELDS
 
-default_args = {
-    "owner": "airflow",
-    "start_date": datetime(2024, 1, 1),
-    "email": ["airflow@example.com"],
-    "email_on_failure": False,
-    "email_on_retry": False,
-    "retries": 3,
-    "retry_delay": timedelta(minutes=10)
-}
-
-@dag(dag_id='pri_schools_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['pri_schools_dag'], template_searchpath=["/opt/airflow/"])
-def pri_school_pipeline():
-
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_stg_pri_schools = PostgresOperator(
-        task_id = "create_stg_pri_schools",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_pri_schools.sql"
-    )
-
+@task_group(group_id = "pri_school")
+def pri_school_tasks():
     @task
     def scrape_pri_schools():
         resale_price_scraper = PriSchoolScraper({})
@@ -68,19 +42,6 @@ def pri_school_pipeline():
                         first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
         
-
-    create_pg_warehouse_schema = PostgresOperator(
-        task_id = "create_pg_warehouse_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
-    )
-
-    create_int_resale_price = PostgresOperator(
-        task_id = "create_int_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_pri_schools.sql"
-    )
-
     @task
     def enhance_pri_school_coords(min_id: int):
         if not min_id:
@@ -100,7 +61,8 @@ def pri_school_pipeline():
         enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
         enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
         # Drop rows without Location data and exclude 'postal' column
-        enhanced_rows = enhanced_rows.loc[enhanced_rows['latitude'].notna() & enhanced_rows['longitude'].notna(), enhanced_rows.columns.difference(['postal'])]
+        enhanced_rows = enhanced_rows[enhanced_rows['latitude'].notna() & enhanced_rows['longitude'].notna()]
+        enhanced_rows = enhanced_rows.drop(['postal'], axis=1)
         # Persist to data warehouse
         records = [list(row) for row in enhanced_rows.itertuples(index=False)] 
         columns = list(enhanced_rows.columns)
@@ -108,17 +70,15 @@ def pri_school_pipeline():
             table = 'warehouse.int_pri_schools',
             rows = records,
             target_fields = columns,
-            commit_every = 500
+            commit_every = 500,
+            replace=True,
+            replace_index="id"
         )
         print("Inserted enhanced data into warehouse.int_pri_schools\n")
         print(pd.DataFrame(records))
     
     # Run tasks
-    scrape_parks_ = scrape_pri_schools()
-    enhance_resale_price_coords_ = enhance_pri_school_coords(scrape_parks_)
+    scrape_pri_schools_ = scrape_pri_schools()
+    enhance_pri_price_coords_ = enhance_pri_school_coords(scrape_pri_schools_)
     # Pipeline order
-    create_pg_stg_schema >> create_stg_pri_schools >> scrape_parks_
-    scrape_parks_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords_ 
-
-pri_school_pipeline_dag = pri_school_pipeline()
+    scrape_pri_schools_ >> enhance_pri_price_coords_ 

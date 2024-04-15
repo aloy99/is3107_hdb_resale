@@ -3,18 +3,21 @@ from datetime import datetime, timedelta
 
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
+from airflow.operators.email_operator import EmailOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
 from common.columns import TABLE_META
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, PROXIMITY_RADIUS
-from common.utils import calc_dist
+from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
+from common.utils import calc_dist, process_amenities
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
-from reporting.utils import consolidate_report, plot_default_features, plot_mrt_info
-from data_preparation.utils import clean_resale_prices_for_visualisation
+
+from task_groups.report import report_tasks
 
 default_args = {
     "owner": "airflow",
@@ -28,18 +31,6 @@ default_args = {
 
 @dag(dag_id='hdb_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
 def hdb_pipeline():
-
-    create_pg_stg_schema = PostgresOperator(
-        task_id = "create_pg_stg_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS staging;"
-    )
-
-    create_stg_resale_price = PostgresOperator(
-        task_id = "create_stg_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/stg_resale_prices.sql"
-    )
 
     @task
     def scrape_resale_prices():
@@ -69,19 +60,6 @@ def hdb_pipeline():
                         first_id = first_id if first_id else curr_id
                         first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
-        
-
-    create_pg_warehouse_schema = PostgresOperator(
-        task_id = "create_pg_warehouse_schema",
-        postgres_conn_id = "resale_price_db",
-        sql = "CREATE SCHEMA IF NOT EXISTS warehouse;"
-    )
-
-    create_int_resale_price = PostgresOperator(
-        task_id = "create_int_resale_price",
-        postgres_conn_id = "resale_price_db",
-        sql = "sql/tables/int_resale_prices.sql"
-    )
 
     @task
     def enhance_resale_price_coords(min_id: int):
@@ -117,40 +95,38 @@ def hdb_pipeline():
     @task
     def get_mrts_within_radius():
         pg_hook = PostgresHook("resale_price_db")
-        # Fetch the recent resale price entries
+
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT rp.id, rp.latitude, rp.longitude
-            FROM warehouse.int_resale_prices rp
-            LEFT JOIN warehouse.int_nearest_mrt np 
-            ON rp.id = np.flat_id
-            WHERE np.flat_id IS NULL;
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_mrt_within_radius IS NULL;
         """)
-
-        mrts_df = pg_hook.get_pandas_df("""
-            SELECT id, mrt, latitude, longitude
-            FROM warehouse.int_mrts;
-        """)
-
-        for _, flat in resale_prices_df.iterrows():
-            count_mrts = 0
-            for _, mrt in mrts_df.iterrows():
-                distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                min_dist = None
-                if distance <= PROXIMITY_RADIUS:
-                    count_mrts += 1
-                    if min_dist is None or distance < min_dist:
-                        min_dist = distance
-                # Persist details of nearest mrt to this flat
-                if min_dist:
-                    pg_hook.run("""
-                        INSERT INTO warehouse.int_nearest_mrt (flat_id, nearest_mrt_id, num_mrts_within_radius, distance)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (flat_id) DO UPDATE 
-                        SET nearest_mrt_id = EXCLUDED.nearest_mrt_id, 
-                            num_mrts_within_radius = EXCLUDED.num_mrts_within_radius, 
-                            distance = EXCLUDED.distance;
-                    """, parameters=(flat['id'], mrt['id'], count_mrts, min_dist))
-        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrt")
+        pri_school_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_mrts;")
+        results = []
+        with ThreadPoolExecutor(10) as executor:
+            future_to_flat = {executor.submit(process_amenities, flat, pri_school_df): flat for _, flat in resale_prices_df.iterrows()}
+            for future in as_completed(future_to_flat):
+                results.append(future.result())
+        insert_params = []
+        update_params = []
+        for result in results:
+            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
+            update_params.append((result['count'], result['flat_id']))
+        # Batch insertions
+        if insert_params:
+            pg_hook.insert_rows(
+                table = 'warehouse.int_nearest_mrts',
+                rows = insert_params,
+                target_fields = ['flat_id', 'mrt_id', 'distance'],
+                commit_every = 500
+            )
+        # Batch updates
+        for count, flat_id in update_params:
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_mrt_within_radius = %s
+                WHERE id = %s; 
+            """, parameters=(count, flat_id))
 
     @task
     def get_dist_from_cbd():
@@ -172,41 +148,85 @@ def hdb_pipeline():
         print("Updated distance to CBD")
 
     @task
-    def process_data():
+    def get_pri_schs_within_radius():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT 
-                rp.*, 
-                mrts.mrt AS nearest_mrt, 
-                nm.num_mrts_within_radius as num_mrts_within_radius,
-                nm.distance AS dist_to_nearest_mrt
-            FROM 
-                warehouse.int_resale_prices rp
-            LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.nearest_mrt_id;
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_pri_sch_within_radius IS NULL;
         """)
-        # Clean and standardise data
-        resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
-        return resale_prices_df
-    
+        pri_school_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_pri_schools;")
+        results = []
+        with ThreadPoolExecutor(10) as executor:
+            future_to_flat = {executor.submit(process_amenities, flat, pri_school_df): flat for _, flat in resale_prices_df.iterrows()}
+            for future in as_completed(future_to_flat):
+                results.append(future.result())
+        insert_params = []
+        update_params = []
+        for result in results:
+            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
+            update_params.append((result['count'], result['flat_id']))
+        # Batch insertions
+        if insert_params:
+            pg_hook.insert_rows(
+                table = 'warehouse.int_nearest_pri_schools',
+                rows = insert_params,
+                target_fields = ['flat_id', 'pri_sch_id', 'distance'],
+                commit_every = 500
+            )
+        # Batch updates
+        for count, flat_id in update_params:
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_pri_sch_within_radius = %s
+                WHERE id = %s; 
+            """, parameters=(count, flat_id))
+
     @task
-    def generate_report(df):
-        plot_default_features(df)
-        plot_mrt_info(df)
-        # Paste images in report
-        consolidate_report()
-       
+    def get_parks_within_radius():
+        pg_hook = PostgresHook("resale_price_db")
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_park_within_radius IS NULL;
+        """)
+        park_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_parks;")
+        results = []
+        with ThreadPoolExecutor(10) as executor:
+            future_to_flat = {executor.submit(process_amenities, flat, park_df): flat for _, flat in resale_prices_df.iterrows()}
+            for future in as_completed(future_to_flat):
+                results.append(future.result())
+        insert_params = []
+        update_params = []
+        for result in results:
+            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
+            update_params.append((result['count'], result['flat_id']))
+        # Batch insertions
+        if insert_params:
+            pg_hook.insert_rows(
+                table = 'warehouse.int_nearest_parks',
+                rows = insert_params,
+                target_fields = ['flat_id', 'park_id', 'distance'],
+                commit_every = 500
+            )
+        # Batch updates
+        for count, flat_id in update_params:
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_park_within_radius = %s
+                WHERE id = %s; 
+            """, parameters=(count, flat_id))
+            
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
     enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
     get_mrts_within_radius_ = get_mrts_within_radius()
+    get_pri_schs_within_radius_ = get_pri_schs_within_radius()
+    get_parks_within_radius_ = get_parks_within_radius()
     get_dist_from_cbd_ = get_dist_from_cbd()
-    processed_data = process_data()
-    generate_report_ = generate_report(processed_data)
+
     # Pipeline order
-    create_pg_stg_schema >> create_stg_resale_price >> scrape_resale_prices_
-    scrape_resale_prices_ >> create_pg_warehouse_schema >> create_int_resale_price 
-    create_int_resale_price >> enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_dist_from_cbd_
-    get_dist_from_cbd_ >> processed_data >>  generate_report_
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_dist_from_cbd_
+    get_dist_from_cbd_ >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()

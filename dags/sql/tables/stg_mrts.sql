@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS staging.stg_mrts(
-    id SERIAL,
-    mrt TEXT,
-    opening_date DATE,
-    PRIMARY KEY (mrt)
+    id SERIAL PRIMARY KEY,
+    mrt TEXT UNIQUE,
+    opening_date DATE
 );

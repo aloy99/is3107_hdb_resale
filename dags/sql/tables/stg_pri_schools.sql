@@ -8,4 +8,4 @@ CREATE TABLE IF NOT EXISTS staging.stg_pri_schools(
     autonomous_ind TEXT,
     gifted_ind TEXT
 );
-CREATE INDEX idx_school_name ON staging.stg_pri_schools(school_name);
+CREATE INDEX IF NOT EXISTS idx_school_name ON staging.stg_pri_schools(school_name);

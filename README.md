@@ -17,4 +17,4 @@ To select and view all tables
 
 ## Report Generation
 To extract pdfs
-```docker cp <<container_id>>:/tmp/report.pdf .```
+```docker cp <<container_id>>:/tmp/report.html .```

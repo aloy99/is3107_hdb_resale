@@ -1,1 +1,1 @@
-MRT_OPENING_DATES_URL = "https://firebasestorage.googleapis.com/v0/b/storeroom-eac25.appspot.com/o/mrt_data.json?alt=media&token=5cf4baf5-3c40-47f4-b0b4-b01674df6bcc"
+MRT_OPENING_DATES_URL = "https://en.wikipedia.org/wiki/List_of_Singapore_MRT_stations"
