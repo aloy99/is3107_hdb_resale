@@ -7,3 +7,4 @@ reportlab
 matplotlib
 scipy
 html5lib
+seaborn

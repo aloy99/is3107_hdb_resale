@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -8,7 +9,7 @@ from datetime import datetime
 import base64
 
 from reporting.constants import IMAGE_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE
-from common.constants import PROXIMITY_RADIUS
+from common.constants import FETCHING_RADIUS, PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
@@ -32,9 +33,9 @@ def plot_default_features(df):
     def plot_real_prices(df: pd.DataFrame):
         _, ax = plt.subplots() 
         # Plot Unadjusted Prices
-        df.groupby('transaction_month')['resale_price'].median().plot(ax=ax, color='#18bddd', label='Unadjusted for Inflation')
+        df.groupby('transaction_month')['resale_price'].mean().plot(ax=ax, color='#18bddd', label='Unadjusted for Inflation')
         # Plot Adjusted Prices
-        df.groupby('transaction_month')['real_resale_price'].median().plot(ax=ax, color='#df9266', label='Adjusted for Inflation')
+        df.groupby('transaction_month')['real_resale_price'].mean().plot(ax=ax, color='#df9266', label='Adjusted for Inflation')
         # Format the x-axis to display dates nicely
         years = mdates.YearLocator()  # Every year
         years_fmt = mdates.DateFormatter('%Y')
@@ -136,8 +137,10 @@ def plot_default_features(df):
 
     def plot_price_vs_distance_to_cbd(df: pd.DataFrame):
         _, ax = plt.subplots()
-        # Create a scatter plot of price vs. distance for properties within 50km from CBD.
-        ax.scatter(df['distance_from_cbd'], df['price_per_sqm'], alpha=0.6)
+        # Scatter plot
+        sns.scatterplot(x='distance_from_cbd', y='price_per_sqm', data=df, alpha=0.6)
+        # Regression line
+        sns.regplot(x='distance_from_cbd', y='price_per_sqm', data=df, scatter=False, color='red')
         ax.set_xlabel('Distance from CBD (km)')
         ax.set_ylabel('Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_cbd')
@@ -155,33 +158,48 @@ def plot_default_features(df):
 def plot_mrt_info(df):
     def plot_proximity_to_mrts(df):
         _, ax = plt.subplots() 
-        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].mean()
-        grouped_data.plot(kind='line')
-        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
-        plt.suptitle('')  # Suppress the automatic title
+        df_filtered = df[df['distance_to_mrt'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        df_grouped = df_filtered.groupby('flat_id').agg(
+            num_mrts_within_radius=('mrt_id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        ).reset_index()
+        # Use seaborn's boxplot to plot this data
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='num_mrts_within_radius', y='price_per_sqm', data=df_grouped)
+        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km')
+        ax.set_xlabel('Average Price Per Sqm (SGD)')
+        plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if they overlap
+        # Save the plot as an image
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
 
-    def plot_distance_to_mrt(df):
+    def plot_distance_to_nearest_mrt(df):
         _, ax = plt.subplots() 
-        # Aggregated scatter plot to reduce noise
-        df_filtered = df.dropna(subset=['nearest_mrt'])
-        bins = pd.cut(df_filtered['dist_to_nearest_mrt'], bins=np.arange(0, df_filtered['dist_to_nearest_mrt'].max() + 0.1, 0.1))
-        grouped = df_filtered.groupby(bins)['price_per_sqm'].mean().reset_index()
-        # Get the mid-point of each interval for plotting
-        grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
-        plt.scatter(grouped['dist_mid'], grouped['price_per_sqm'], alpha=0.6)
+        nearest_mrts = df.groupby('flat_id').agg(
+            distance_to_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            price_per_sqm=('price_per_sqm', 'mean')  # Average price per sqm
+        ).reset_index()
+        # Use quantile-based binning or user-defined intervals
+        bin_edges = np.quantile(nearest_mrts['distance_to_mrt'], np.linspace(0, 1, num=10))
+        bins = pd.cut(nearest_mrts['distance_to_mrt'], bins=bin_edges, include_lowest=True)
+        grouped = nearest_mrts.groupby(bins)['price_per_sqm'].mean().reset_index()
+        grouped['dist_mid'] = grouped['distance_to_mrt'].apply(lambda x: x.mid)
+        sns.scatterplot(x='dist_mid', y='price_per_sqm', data=grouped, alpha=0.6)
+        sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')
         ax.set_xlabel('Distance to Nearest MRT (km)')
         ax.set_ylabel('Average Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_nearest_mrt')
-        plt.close()
-    
+        plt.show()
+
     def plot_different_mrts(df):
         _, ax = plt.subplots() 
-        df_filtered = df[df['dist_to_nearest_mrt'].notnull() & (df['dist_to_nearest_mrt'] < 2)]
+        df_filtered = df.groupby('flat_id').agg(
+            distance_to_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+            price_per_sqm=('price_per_sqm', 'mean') 
+        ).reset_index()
+        df_filtered = df[df['distance_to_mrt'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
         # Group by 'nearest_mrt' and calculate mean 'price_per_sqm', then sort by values
-        average_prices_by_mrt = df_filtered.groupby('nearest_mrt')['price_per_sqm'].mean().sort_values(ascending=False)
+        average_prices_by_mrt = df_filtered.groupby('mrt')['price_per_sqm'].mean().sort_values(ascending=False)
         # Sort values and select the top n and bottom n
         n = 8
         top_mrts = average_prices_by_mrt.nlargest(n)
@@ -193,8 +211,117 @@ def plot_mrt_info(df):
         ax.set_ylabel('Average Price Per Sqm (SGD)')
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
         save_plot_as_image(plt, 'different_mrt_prices')
-        plt.show()
+        plt.close()
 
     plot_proximity_to_mrts(df)
-    plot_distance_to_mrt(df)
+    plot_distance_to_nearest_mrt(df)
     plot_different_mrts(df)
+
+def plot_pri_sch_info(df):
+    def plot_price_vs_schools(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        # Group by flat, count the number of schools within the proximity radius
+        df_grouped = df_filtered.groupby('flat_id').agg(
+            num_pri_sch_within_radius=('pri_sch_id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        ).reset_index()
+        _, ax = plt.subplots()
+        # Boxplot
+        sns.boxplot(x='num_pri_sch_within_radius', y='price_per_sqm', data=df_grouped)
+        ax.set_xlabel(f'Number of Primary Schools within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS} Radius')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'num_pri_sch_within_radius_boxplot')
+        plt.close()
+
+    def plot_nearest_pri_schs(df):
+        _, ax = plt.subplots()
+        # Scatter plot
+        sns.scatterplot(x='distance_to_school', y='price_per_sqm', data=df, alpha=0.5, edgecolor=None)
+        # To avoid overplotting in scatter plots, reduce alpha and remove edgecolor
+        # Regression line
+        sns.regplot(x='distance_to_school', y='resale_price', data=df, scatter=False, color='red')
+        ax.set_xlabel('Distance to Nearest Primary School (km)')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'dist_to_nearest_pri_sch')
+        plt.close()
+
+    def plot_price_vs_school_type(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, ax = plt.subplots()
+        sns.boxplot(x='type_code', y='price_per_sqm', data=df_filtered)
+        ax.set_xlabel('School Type Code')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'resale_price_vs_school_type')
+        plt.close()
+
+    def plot_price_vs_school_nature(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, axes = plt.subplots()
+        sns.boxplot(x='nature_code', y='price_per_sqm', data=df_filtered)
+        axes.set_xlabel('School Nature Code')
+        axes.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'resale_price_vs_school_nature')
+        plt.close()
+
+    def plot_price_vs_special_programs(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
+        sns.boxplot(x='sap_ind', y='price_per_sqm', data=df, ax=axes[0])
+        axes[0].set_title('SAP Schools')
+        axes[0].set_xlabel('SAP Indicator')
+        axes[0].set_ylabel('Price per sqm (SGD)')
+        sns.boxplot(x='autonomous_ind', y='price_per_sqm', data=df_filtered, ax=axes[1])
+        axes[1].set_title('Autonomous Schools')
+        axes[1].set_xlabel('Autonomous Indicator')
+        axes[1].set_ylabel('')
+        sns.boxplot(x='gifted_ind', y='price_per_sqm', data=df, ax=axes[2])
+        axes[2].set_title('Gifted Education Programme')
+        axes[2].set_xlabel('Gifted Indicator')
+        axes[2].set_ylabel('')
+        save_plot_as_image(plt, 'resale_price_vs_special_programs')
+        plt.close()
+        
+    plot_price_vs_schools(df)
+    plot_nearest_pri_schs(df)
+    plot_price_vs_school_type(df)
+    plot_price_vs_school_nature(df)
+    plot_price_vs_special_programs(df)
+
+def plot_park_info(df):
+    # Average price per sqm for flats by number of nearby parks
+    def average_price_per_sqm_by_num_parks(df):
+        _, ax = plt.subplots()
+        df_filtered = df[df['distance_to_park'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        # Group by flat, count the number of parks within the proximity radius
+        group_data = df_filtered.groupby('flat_id').agg(
+            num_parks_within_radius=('id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        )
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='num_parks_within_radius', y='price_per_sqm', data=group_data)
+        ax.set_xlabel('Number of Parks within Radius')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'num_parks_within_radius')
+        plt.close()
+    
+    def prices_near_specific_parks(df):
+        n = 8
+        _, ax = plt.subplots()
+        df_near_parks = df[df['distance_to_park'] <= PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]    
+        # Group by park name and calculate average price per sqm
+        park_price_sqm = df_near_parks.groupby('park').agg(
+            average_price_per_sqm=('price_per_sqm', 'mean')
+        ).reset_index().sort_values(by='average_price_per_sqm', ascending=True)
+        # Combine the top n and bottom n parks
+        combined_parks = pd.concat([park_price_sqm.head(n), park_price_sqm.tail(n)])
+        # Create a single plot
+        plt.figure(figsize=(12, 8))  # Adjust figure size as needed
+        sns.barplot(x='park', y='average_price_per_sqm', data=combined_parks, order=combined_parks['park'])
+        ax.set_xlabel('Park')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        plt.xticks(rotation=45, ha='right')
+        save_plot_as_image(plt, 'prices_near_specific_parks')
+        plt.close()
+
+    average_price_per_sqm_by_num_parks(df)
+    prices_near_specific_parks(df)
