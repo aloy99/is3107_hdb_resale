@@ -14,8 +14,11 @@ def report_tasks():
     def select_and_transform_report_data():
         pg_hook = PostgresHook("resale_price_db")
         resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT * FROM warehouse.int_resale_prices;
+        """)
+        mrt_prices_df = pg_hook.get_pandas_df("""
             SELECT 
-                rp.*, 
+                rp.resale_price, rp.floor_area_sqm
                 mrts.mrt AS nearest_mrt, 
                 nm.num_mrts_within_radius as num_mrts_within_radius,
                 nm.distance AS dist_to_nearest_mrt
@@ -26,12 +29,17 @@ def report_tasks():
         """)
         # Clean and standardise data
         resale_prices_df = clean_resale_prices_for_visualisation(resale_prices_df)
-        return resale_prices_df
+        mrt_prices_df = clean_resale_prices_for_visualisation(mrt_prices_df)
+
+        return {
+            'resale_prices': resale_prices_df,
+            'mrt_prices': mrt_prices_df,
+        }
     
     @task
-    def generate_report(df):
-        plot_default_features(df)
-        plot_mrt_info(df)
+    def generate_report(df_set):
+        plot_default_features(df_set['resale_prices'])
+        plot_mrt_info(df_set['mrt_prices'])
         # Paste images in report
         return create_html_report()
 
