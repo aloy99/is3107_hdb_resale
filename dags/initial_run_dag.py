@@ -8,6 +8,7 @@ from task_groups.mrt import mrt_tasks
 from task_groups.park import park_tasks
 from task_groups.pri_schools import pri_school_tasks
 from task_groups.supermarket import supermarket_tasks
+from task_groups.reservoirs import reservoirs_tasks
 
 default_args = {
     "owner": "airflow",
@@ -21,7 +22,7 @@ default_args = {
 
 @dag(dag_id='initial_setup_dag', default_args=default_args, schedule=None, catchup=False, tags=['migration'], template_searchpath=["/opt/airflow/"])
 def initial_setup():
-    migration_tasks() >> [mrt_tasks(), park_tasks(), pri_school_tasks(), supermarket_tasks()]
+    migration_tasks() >> [mrt_tasks(), park_tasks(), pri_school_tasks(), supermarket_tasks(), reservoirs_tasks()]
     
 
 initial_setup_dag = initial_setup()
