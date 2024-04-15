@@ -29,6 +29,12 @@ def migration_tasks():
         sql = "sql/tables/stg_parks.sql"
     )
 
+    create_stg_reservoirs = PostgresOperator(
+        task_id = "create_stg_reservoirs",
+        postgres_conn_id = "resale_price_db",
+        sql = "sql/tables/stg_reservoirs.sql"
+    )
+
     create_stg_pri_schools = PostgresOperator(
         task_id = "create_stg_pri_schools",
         postgres_conn_id = "resale_price_db",
@@ -83,5 +89,5 @@ def migration_tasks():
         sql = "sql/tables/int_nearest_pri_schools.sql"
     )
 
-    create_pg_stg_schema >> [create_stg_resale_price, create_stg_mrts, create_stg_parks, create_stg_pri_schools]
+    create_pg_stg_schema >> [create_stg_resale_price, create_stg_mrts, create_stg_parks, create_stg_pri_schools, create_stg_reservoirs]
     create_pg_warehouse_schema >> [create_int_mrts, create_int_nearest_mrts, create_int_resale_price, create_int_parks, create_int_nearest_parks, create_int_pri_schools, create_int_nearest_pri_schools] 
