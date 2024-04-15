@@ -243,5 +243,5 @@ def plot_pri_sch_info(df):
         save_plot_as_image(plt, 'nearest_pri_sch')
         plt.close()
 
-    plot_num_nearest_pri_sch_info(df)
-    plot_nearest_pri_sch_info(df)
+    # plot_num_nearest_pri_sch_info(df)
+    # plot_nearest_pri_sch_info(df)
