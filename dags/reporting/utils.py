@@ -168,7 +168,7 @@ def plot_mrt_info(df):
         sns.boxplot(x='num_mrts_within_radius', y='price_per_sqm', data=df_grouped)
         ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km')
         ax.set_xlabel('Average Price Per Sqm (SGD)')
-        plt.xticks(rotation=45)  # Rotate x-axis labels if they overlap
+        plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if they overlap
         # Save the plot as an image
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
@@ -288,16 +288,6 @@ def plot_pri_sch_info(df):
     plot_price_vs_special_programs(df)
 
 def plot_park_info(df):
-    def scatter_resale_price_distance_to_park(df):
-        _, ax = plt.subplots()
-        plt.figure(figsize=(10, 6))
-        sns.scatterplot(x='distance_to_park', y='resale_price', data=df)
-        ax.set_xlabel('Distance to Nearest Park (km)')
-        ax.set_ylabel('Resale Price (SGD)')
-        plt.legend(title='Number of Parks within Radius', bbox_to_anchor=(1.05, 1), loc=2)
-        save_plot_as_image(plt, 'resale_price_vs_dist_to_park')
-        plt.close()
-
     # Average price per sqm for flats by number of nearby parks
     def average_price_per_sqm_by_num_parks(df):
         _, ax = plt.subplots()
@@ -315,21 +305,23 @@ def plot_park_info(df):
         plt.close()
     
     def prices_near_specific_parks(df):
+        n = 8
         _, ax = plt.subplots()
-        df_near_parks = df[df['distance_to_park'] <= PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        df_near_parks = df[df['distance_to_park'] <= PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]    
         # Group by park name and calculate average price per sqm
         park_price_sqm = df_near_parks.groupby('park').agg(
             average_price_per_sqm=('price_per_sqm', 'mean')
-        ).reset_index().sort_values(by='average_price_per_sqm', ascending=False)
-        # Plotting
-        plt.figure(figsize=(12, 6))
-        sns.barplot(x='average_price_per_sqm', y='park', data=park_price_sqm)
-        ax.set_xlabel('Average Price Per Sqm (SGD)')
-        ax.set_ylabel('Park')
-        plt.xticks(rotation=45)
+        ).reset_index().sort_values(by='average_price_per_sqm', ascending=True)
+        # Combine the top n and bottom n parks
+        combined_parks = pd.concat([park_price_sqm.head(n), park_price_sqm.tail(n)])
+        # Create a single plot
+        plt.figure(figsize=(12, 8))  # Adjust figure size as needed
+        sns.barplot(x='park', y='average_price_per_sqm', data=combined_parks, order=combined_parks['park'])
+        ax.set_xlabel('Park')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        plt.xticks(rotation=45, ha='right')
         save_plot_as_image(plt, 'prices_near_specific_parks')
-        plt.show()
+        plt.close()
 
-    scatter_resale_price_distance_to_park(df)
     average_price_per_sqm_by_num_parks(df)
     prices_near_specific_parks(df)
