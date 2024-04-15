@@ -9,7 +9,7 @@ from datetime import datetime
 import base64
 
 from reporting.constants import IMAGE_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE
-from common.constants import PROXIMITY_RADIUS
+from common.constants import PROXIMITY_RADIUS, PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
@@ -206,42 +206,71 @@ def plot_mrt_info(df):
     plot_different_mrts(df)
 
 def plot_pri_sch_info(df):
-    def plot_num_nearest_pri_sch_info(df):
-        _, ax = plt.subplots() 
-        df['num_pri_sch_within_radius'] = pd.to_numeric(df['num_pri_sch_within_radius'], errors='coerce')
-        df['price_per_sqm'] = pd.to_numeric(df['price_per_sqm'], errors='coerce')
-        # Aggregate the data
-        agg_data = df.groupby('num_pri_sch_within_radius')['price_per_sqm'].median().reset_index()
+    def plot_price_vs_schools(df):
+        df_filtered = df[df['distance_to_school'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
+        # Group by flat, count the number of schools within the proximity radius
+        df_grouped = df_filtered.groupby('flat_id').agg(
+            num_pri_sch_within_radius=('pri_sch_id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        ).reset_index()
+        _, ax = plt.subplots()
+        # Boxplot
+        sns.boxplot(x='num_pri_sch_within_radius', y='price_per_sqm', data=df_grouped)
+        ax.set_xlabel(f'Number of Primary Schools within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS} Radius')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'num_pri_sch_within_radius_boxplot')
+        plt.close()
+
+    def plot_nearest_pri_schs(df):
+        _, ax = plt.subplots()
         # Scatter plot
-        sns.scatterplot(x='num_pri_sch_within_radius', y='price_per_sqm', data=agg_data, alpha=0.6)
+        sns.scatterplot(x='distance_to_school', y='price_per_sqm', data=df, alpha=0.5, edgecolor=None)
+        # To avoid overplotting in scatter plots, reduce alpha and remove edgecolor
         # Regression line
-        ax.set_xlabel('Number of Nearby Primary Schools')
-        ax.set_ylabel('Price Per Sqm (SGD)')
-        save_plot_as_image(plt, 'num_nearest_pri_sch')
+        sns.regplot(x='distance_to_school', y='resale_price', data=df, scatter=False, color='red')
+        ax.set_xlabel('Distance to Nearest Primary School (km)')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'dist_to_nearest_pri_sch')
         plt.close()
 
-    def plot_nearest_pri_sch_info(df):
-        _, ax = plt.subplots() 
-        n = 8
-        df['price_per_sqm'] = pd.to_numeric(df['price_per_sqm'], errors='coerce') 
-        # Calculate the median or median price per sqm for each school
-        school_price_stats = df.groupby('school_name')['price_per_sqm'].median().sort_values()
-        # Take the top N and bottom N schools
-        top_schools = school_price_stats.nlargest(n)
-        bottom_schools = school_price_stats.nsmallest(n)
-        # Combine top and bottom schools into one Series
-        selected_schools = pd.concat([top_schools, bottom_schools]).index
-        # Filter the original dataframe for only the selected schools
-        selected_schools_df = df[df['school_name'].isin(selected_schools)]
-        # Create the box plot
-        plt.figure(figsize=(15, 10))
-        sns.boxplot(x='school_name', y='price_per_sqm', data=selected_schools_df, order=selected_schools)
-        # Improve the aesthetics
-        plt.xticks(rotation=45)  # Rotate the labels for better readability
-        ax.set_xlabel('Nearest School')
-        ax.set_ylabel('Price Per Sqm (SGD)')
-        save_plot_as_image(plt, 'nearest_pri_sch')
+    def plot_price_vs_school_type(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, ax = plt.subplots(figsize=(10, 6))
+        sns.boxplot(x='type_code', y='price_per_sqm', data=df_filtered)
+        ax.set_xlabel('School Type Code')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'resale_price_vs_school_type')
         plt.close()
 
-    # plot_num_nearest_pri_sch_info(df)
-    # plot_nearest_pri_sch_info(df)
+    def plot_price_vs_school_nature(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, ax = plt.subplots(figsize=(10, 6))
+        sns.boxplot(x='nature_code', y='price_per_sqm', data=df_filtered)
+        ax.set_xlabel('School Nature Code')
+        ax.set_ylabel('Price per sqm (SGD)')
+        save_plot_as_image(plt, 'resale_price_vs_school_nature')
+        plt.close()
+
+    def plot_price_vs_special_programs(df):
+        df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        _, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
+        sns.boxplot(x='sap_ind', y='price_per_sqm', data=df, ax=axes[0])
+        axes[0].set_title('SAP Schools')
+        axes[0].set_xlabel('SAP Indicator')
+        axes[0].set_ylabel('Price per sqm (SGD)')
+        sns.boxplot(x='autonomous_ind', y='price_per_sqm', data=df_filtered, ax=axes[1])
+        axes[1].set_title('Autonomous Schools')
+        axes[1].set_xlabel('Autonomous Indicator')
+        axes[1].set_ylabel('')
+        sns.boxplot(x='gifted_ind', y='price_per_sqm', data=df, ax=axes[2])
+        axes[2].set_title('Gifted Education Programme')
+        axes[2].set_xlabel('Gifted Indicator')
+        axes[2].set_ylabel('')
+        save_plot_as_image(plt, 'resale_price_vs_special_programs')
+        plt.close()
+        
+    plot_price_vs_schools(df)
+    plot_nearest_pri_schs(df)
+    plot_price_vs_school_type(df)
+    plot_price_vs_school_nature(df)
+    plot_price_vs_special_programs(df)

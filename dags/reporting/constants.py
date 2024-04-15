@@ -1,3 +1,5 @@
+from common.constants import PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
+
 IMAGE_PATHS = {
     'real_prices': {
         'title': 'Real vs Nominal Resale Prices',
@@ -32,7 +34,7 @@ IMAGE_PATHS = {
         'path': './dist_to_nearest_mrt.png'
     },
     'different_mrt_prices': {
-        'title': 'Top and Bottom MRT Stations by Average Price Per Sqm (within 2km)',
+        'title': f'Top and Bottom MRT Stations by Average Price Per Sqm (within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km)',
         'path': './different_mrt_prices.png'
     },
     'dist_to_cbd_distribution': {
@@ -40,17 +42,29 @@ IMAGE_PATHS = {
         'path': './dist_to_cbd_distribution.png'
     },
     'dist_to_cbd': {
-        'title': 'Resale Price vs. Distance from CBD',
+        'title': 'Price per sqm vs. Distance from CBD',
         'path': './dist_to_cbd.png'
     },
-    # 'num_nearest_pri_sch': {
-    #     'title': 'Flat Prices in Relation to Number of Nearby Primary Schools',
-    #     'path': './num_nearest_pri_sch.png'
-    # },
-    # 'nearest_pri_sch': {
-    #     'title': 'Flat Prices in Relation to the Nearest School',
-    #     'path': './nearest_pri_sch.png'
-    # }
+    'num_pri_sch_within_radius_boxplot': {
+         'title': f'Box Plot of Resale Prices by Number of Primary Schools within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km',
+         'path': './num_pri_sch_within_radius_boxplot.png'
+     },
+    'dist_to_nearest_pri_sch': {
+         'title': 'Price per sqm vs. Distance to Nearest Primary School',
+         'path': './dist_to_nearest_pri_sch.png'
+     },
+    'resale_price_vs_school_type': {
+         'title': 'Price per sqm by School Type',
+         'path': './dist_to_nearest_pri_sch.png'
+     },
+    'resale_price_vs_school_nature': {
+         'title': 'Price per sqm by School Nature',
+         'path': './resale_price_vs_school_nature.png'
+     },
+    'resale_price_vs_special_programs': {
+         'title': 'Price per sqm by Special Programs',
+         'path': './resale_price_vs_special_programs.png'
+     }
 }
 
 HTML_PATH = './report.html'

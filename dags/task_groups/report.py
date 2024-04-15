@@ -28,23 +28,25 @@ def report_tasks():
             LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
             JOIN warehouse.int_mrts as mrts ON mrts.id = nm.nearest_mrt_id;
         """)
-        # pri_sch_prices_df = pg_hook.get_pandas_df("""
-        #     SELECT 
-        #         rp.resale_price, 
-        #         rp.floor_area_sqm,
-        #         prischs.*,
-        #         nps.num_pri_sch_within_radius, 
-        #         nps.nearest_distance   
-        #     FROM 
-        #         warehouse.int_resale_prices rp
-        #     LEFT JOIN warehouse.int_nearest_pri_schools as nps ON rp.id = nps.flat_id
-        #     JOIN warehouse.int_pri_schools as prischs ON prischs.id = nps.nearest_pri_sch_id;
-        # """)
+        pri_sch_prices_df = pg_hook.get_pandas_df("""
+            SELECT
+                rp.resale_price,
+                rp.floor_area_sqm,
+                rp.num_pri_sch_within_radius,
+                ps.*,
+                nps.distance as distance_to_school
+            FROM
+                warehouse.int_resale_prices rp
+            JOIN
+                warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
+            JOIN
+                warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
+        """)
 
         all_dfs = {
             'resale_prices': resale_prices_df,
             'mrt_prices': mrt_prices_df,
-            # 'nearest_pri_sch_prices': pri_sch_prices_df
+            'nearest_pri_sch_prices': pri_sch_prices_df
         }
         # Clean and standardise data
         for key in all_dfs:
@@ -55,7 +57,7 @@ def report_tasks():
     def generate_report(df_set):
         plot_default_features(df_set['resale_prices'])
         plot_mrt_info(df_set['mrt_prices'])
-        # plot_pri_sch_info(df_set['nearest_pri_sch_prices'])
+        plot_pri_sch_info(df_set['nearest_pri_sch_prices'])
         # Paste images in report
         return create_html_report()
 
