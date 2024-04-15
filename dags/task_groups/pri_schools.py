@@ -61,7 +61,8 @@ def pri_school_tasks():
         enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
         enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
         # Drop rows without Location data and exclude 'postal' column
-        enhanced_rows = enhanced_rows.loc[enhanced_rows['latitude'].notna() & enhanced_rows['longitude'].notna(), enhanced_rows.columns.difference(['postal'])]
+        enhanced_rows = enhanced_rows[enhanced_rows['latitude'].notna() & enhanced_rows['longitude'].notna()]
+        enhanced_rows = enhanced_rows.drop(['postal'], axis=1)
         # Persist to data warehouse
         records = [list(row) for row in enhanced_rows.itertuples(index=False)] 
         columns = list(enhanced_rows.columns)
@@ -69,7 +70,9 @@ def pri_school_tasks():
             table = 'warehouse.int_pri_schools',
             rows = records,
             target_fields = columns,
-            commit_every = 500
+            commit_every = 500,
+            replace=True,
+            replace_index="id"
         )
         print("Inserted enhanced data into warehouse.int_pri_schools\n")
         print(pd.DataFrame(records))
