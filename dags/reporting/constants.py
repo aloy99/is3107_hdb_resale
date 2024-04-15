@@ -42,6 +42,14 @@ IMAGE_PATHS = {
     'dist_to_cbd': {
         'title': 'Resale Price vs. Distance from CBD',
         'path': './dist_to_cbd.png'
+    },
+    'num_nearest_pri_sch': {
+        'title': 'Flat Prices in Relation to Number of Nearby Primary Schools',
+        'path': './num_nearest_pri_sch.png'
+    },
+    'nearest_pri_sch': {
+        'title': 'Flat Prices in Relation to the Nearest School',
+        'path': './nearest_pri_sch.png'
     }
 }
 

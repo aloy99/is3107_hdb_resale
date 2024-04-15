@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -90,13 +91,13 @@ def plot_default_features(df):
         top_towns = df['town'].value_counts().nlargest(10).index
         df_top_towns = df[df['town'].isin(top_towns)]
         # Group by town and flat type, then calculate the average price per square meter
-        grouped_df = df_top_towns.groupby(['town', 'flat_type'])['price_per_sqm'].mean().unstack()
+        grouped_df = df_top_towns.groupby(['town', 'flat_type'])['price_per_sqm'].median().unstack()
         # Make the figure larger
         # Plot the data
         grouped_df.plot(kind='bar', ax=ax, width=0.8)  # Adjust width as necessary
         # Set chart title and labels
         ax.set_xlabel('Town')
-        ax.set_ylabel('Average Price per Sq Meter (SGD)')
+        ax.set_ylabel('Median Price per Sq Meter (SGD)')
         # Rotate the x-tick labels for better readability
         plt.setp(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
         # Legend configuration
@@ -107,21 +108,21 @@ def plot_default_features(df):
 
     def plot_lease_commencement_date(df):
         _, ax = plt.subplots() 
-        lease_commence_analysis = df.groupby(df['lease_commence_date'].dt.year)['price_per_sqm'].mean()
+        lease_commence_analysis = df.groupby(df['lease_commence_date'].dt.year)['price_per_sqm'].median()
         lease_commence_analysis.plot(kind='line')
         # Set chart title and labels
         ax.set_xlabel('Lease Commencement Date')
-        ax.set_ylabel('Average Price per Sq Meter (SGD)')
+        ax.set_ylabel('Median Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'lease_commencement_date')
         plt.close()
 
     def plot_remaining_lease(df):
         _, ax = plt.subplots() 
-        remaining_lease_analysis = df.groupby('remaining_lease')['price_per_sqm'].mean()
+        remaining_lease_analysis = df.groupby('remaining_lease')['price_per_sqm'].median()
         remaining_lease_analysis.plot(kind='line')
         # Set chart title and labels
         ax.set_xlabel('Remaining Lease in Years')
-        ax.set_ylabel('Average Price per Sq Meter (SGD)')
+        ax.set_ylabel('Median Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'remaining_lease')
         plt.close()
 
@@ -136,8 +137,10 @@ def plot_default_features(df):
 
     def plot_price_vs_distance_to_cbd(df: pd.DataFrame):
         _, ax = plt.subplots()
-        # Create a scatter plot of price vs. distance for properties within 50km from CBD.
-        ax.scatter(df['distance_from_cbd'], df['price_per_sqm'], alpha=0.6)
+        # Scatter plot
+        sns.scatterplot(x='distance_from_cbd', y='price_per_sqm', data=df, alpha=0.6)
+        # Regression line
+        sns.regplot(x='distance_from_cbd', y='price_per_sqm', data=df, scatter=False, color='red')
         ax.set_xlabel('Distance from CBD (km)')
         ax.set_ylabel('Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_cbd')
@@ -155,10 +158,10 @@ def plot_default_features(df):
 def plot_mrt_info(df):
     def plot_proximity_to_mrts(df):
         _, ax = plt.subplots() 
-        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].mean()
+        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].median()
         grouped_data.plot(kind='line')
         ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        ax.set_ylabel('Median Price Per Sqm (SGD)')
         plt.suptitle('')  # Suppress the automatic title
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
@@ -168,20 +171,23 @@ def plot_mrt_info(df):
         # Aggregated scatter plot to reduce noise
         df_filtered = df.dropna(subset=['nearest_mrt'])
         bins = pd.cut(df_filtered['dist_to_nearest_mrt'], bins=np.arange(0, df_filtered['dist_to_nearest_mrt'].max() + 0.1, 0.1))
-        grouped = df_filtered.groupby(bins)['price_per_sqm'].mean().reset_index()
+        grouped = df_filtered.groupby(bins)['price_per_sqm'].median().reset_index()
         # Get the mid-point of each interval for plotting
         grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
-        plt.scatter(grouped['dist_mid'], grouped['price_per_sqm'], alpha=0.6)
+        # Scatter plot
+        sns.scatterplot(x='dist_mid', y='price_per_sqm', data=grouped, alpha=0.6)
+        # Regression line
+        sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')        
         ax.set_xlabel('Distance to Nearest MRT (km)')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        ax.set_ylabel('Median Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_nearest_mrt')
         plt.close()
     
     def plot_different_mrts(df):
         _, ax = plt.subplots() 
         df_filtered = df[df['dist_to_nearest_mrt'].notnull() & (df['dist_to_nearest_mrt'] < 2)]
-        # Group by 'nearest_mrt' and calculate mean 'price_per_sqm', then sort by values
-        average_prices_by_mrt = df_filtered.groupby('nearest_mrt')['price_per_sqm'].mean().sort_values(ascending=False)
+        # Group by 'nearest_mrt' and calculate median 'price_per_sqm', then sort by values
+        average_prices_by_mrt = df_filtered.groupby('nearest_mrt')['price_per_sqm'].median().sort_values(ascending=False)
         # Sort values and select the top n and bottom n
         n = 8
         top_mrts = average_prices_by_mrt.nlargest(n)
@@ -190,11 +196,52 @@ def plot_mrt_info(df):
         # Plot
         combined_mrts.plot(kind='bar')
         ax.set_xlabel('Nearest MRT Station')
-        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        ax.set_ylabel('Median Price Per Sqm (SGD)')
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
         save_plot_as_image(plt, 'different_mrt_prices')
-        plt.show()
+        plt.close()
 
     plot_proximity_to_mrts(df)
     plot_distance_to_mrt(df)
     plot_different_mrts(df)
+
+def plot_pri_sch_info(df):
+    def plot_num_nearest_pri_sch_info(df):
+        _, ax = plt.subplots() 
+        df['num_pri_sch_within_radius'] = pd.to_numeric(df['num_pri_sch_within_radius'], errors='coerce')
+        df['price_per_sqm'] = pd.to_numeric(df['price_per_sqm'], errors='coerce')
+        # Aggregate the data
+        agg_data = df.groupby('num_pri_sch_within_radius')['price_per_sqm'].median().reset_index()
+        # Scatter plot
+        sns.scatterplot(x='num_pri_sch_within_radius', y='price_per_sqm', data=agg_data, alpha=0.6)
+        # Regression line
+        ax.set_xlabel('Number of Nearby Primary Schools')
+        ax.set_ylabel('Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'num_nearest_pri_sch')
+        plt.close()
+
+    def plot_nearest_pri_sch_info(df):
+        _, ax = plt.subplots() 
+        n = 8
+        df['price_per_sqm'] = pd.to_numeric(df['price_per_sqm'], errors='coerce') 
+        # Calculate the median or median price per sqm for each school
+        school_price_stats = df.groupby('school_name')['price_per_sqm'].median().sort_values()
+        # Take the top N and bottom N schools
+        top_schools = school_price_stats.nlargest(n)
+        bottom_schools = school_price_stats.nsmallest(n)
+        # Combine top and bottom schools into one Series
+        selected_schools = pd.concat([top_schools, bottom_schools]).index
+        # Filter the original dataframe for only the selected schools
+        selected_schools_df = df[df['school_name'].isin(selected_schools)]
+        # Create the box plot
+        plt.figure(figsize=(15, 10))
+        sns.boxplot(x='school_name', y='price_per_sqm', data=selected_schools_df, order=selected_schools)
+        # Improve the aesthetics
+        plt.xticks(rotation=45)  # Rotate the labels for better readability
+        ax.set_xlabel('Nearest School')
+        ax.set_ylabel('Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'nearest_pri_sch')
+        plt.close()
+
+    plot_num_nearest_pri_sch_info(df)
+    plot_nearest_pri_sch_info(df)
