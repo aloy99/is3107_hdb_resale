@@ -21,26 +21,21 @@ def report_tasks():
                 rp.resale_price, 
                 rp.floor_area_sqm,
                 mrts.mrt AS nearest_mrt, 
-                nm.num_mrts_within_radius as num_mrts_within_radius,
                 nm.distance AS dist_to_nearest_mrt
             FROM 
                 warehouse.int_resale_prices rp
-            LEFT JOIN warehouse.int_nearest_mrt as nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.nearest_mrt_id;
+            JOIN warehouse.int_nearest_mrts as nm ON rp.id = nm.flat_id
+            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.mrt_id;
         """)
         pri_sch_prices_df = pg_hook.get_pandas_df("""
             SELECT
                 rp.resale_price,
                 rp.floor_area_sqm,
-                rp.num_pri_sch_within_radius,
                 ps.*,
                 nps.distance as distance_to_school
-            FROM
-                warehouse.int_resale_prices rp
-            JOIN
-                warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
-            JOIN
-                warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
+            FROM warehouse.int_resale_prices rp
+            JOIN warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
+            JOIN warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
         """)
 
         all_dfs = {

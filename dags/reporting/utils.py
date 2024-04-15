@@ -9,7 +9,7 @@ from datetime import datetime
 import base64
 
 from reporting.constants import IMAGE_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE
-from common.constants import PROXIMITY_RADIUS, PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
+from common.constants import FETCHING_RADIUS, PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
@@ -33,9 +33,9 @@ def plot_default_features(df):
     def plot_real_prices(df: pd.DataFrame):
         _, ax = plt.subplots() 
         # Plot Unadjusted Prices
-        df.groupby('transaction_month')['resale_price'].median().plot(ax=ax, color='#18bddd', label='Unadjusted for Inflation')
+        df.groupby('transaction_month')['resale_price'].mean().plot(ax=ax, color='#18bddd', label='Unadjusted for Inflation')
         # Plot Adjusted Prices
-        df.groupby('transaction_month')['real_resale_price'].median().plot(ax=ax, color='#df9266', label='Adjusted for Inflation')
+        df.groupby('transaction_month')['real_resale_price'].mean().plot(ax=ax, color='#df9266', label='Adjusted for Inflation')
         # Format the x-axis to display dates nicely
         years = mdates.YearLocator()  # Every year
         years_fmt = mdates.DateFormatter('%Y')
@@ -91,13 +91,13 @@ def plot_default_features(df):
         top_towns = df['town'].value_counts().nlargest(10).index
         df_top_towns = df[df['town'].isin(top_towns)]
         # Group by town and flat type, then calculate the average price per square meter
-        grouped_df = df_top_towns.groupby(['town', 'flat_type'])['price_per_sqm'].median().unstack()
+        grouped_df = df_top_towns.groupby(['town', 'flat_type'])['price_per_sqm'].mean().unstack()
         # Make the figure larger
         # Plot the data
         grouped_df.plot(kind='bar', ax=ax, width=0.8)  # Adjust width as necessary
         # Set chart title and labels
         ax.set_xlabel('Town')
-        ax.set_ylabel('Median Price per Sq Meter (SGD)')
+        ax.set_ylabel('Average Price per Sq Meter (SGD)')
         # Rotate the x-tick labels for better readability
         plt.setp(ax.get_xticklabels(), rotation=45, horizontalalignment='right')
         # Legend configuration
@@ -108,21 +108,21 @@ def plot_default_features(df):
 
     def plot_lease_commencement_date(df):
         _, ax = plt.subplots() 
-        lease_commence_analysis = df.groupby(df['lease_commence_date'].dt.year)['price_per_sqm'].median()
+        lease_commence_analysis = df.groupby(df['lease_commence_date'].dt.year)['price_per_sqm'].mean()
         lease_commence_analysis.plot(kind='line')
         # Set chart title and labels
         ax.set_xlabel('Lease Commencement Date')
-        ax.set_ylabel('Median Price per Sq Meter (SGD)')
+        ax.set_ylabel('Average Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'lease_commencement_date')
         plt.close()
 
     def plot_remaining_lease(df):
         _, ax = plt.subplots() 
-        remaining_lease_analysis = df.groupby('remaining_lease')['price_per_sqm'].median()
+        remaining_lease_analysis = df.groupby('remaining_lease')['price_per_sqm'].mean()
         remaining_lease_analysis.plot(kind='line')
         # Set chart title and labels
         ax.set_xlabel('Remaining Lease in Years')
-        ax.set_ylabel('Median Price per Sq Meter (SGD)')
+        ax.set_ylabel('Average Price per Sq Meter (SGD)')
         save_plot_as_image(plt, 'remaining_lease')
         plt.close()
 
@@ -157,21 +157,29 @@ def plot_default_features(df):
 
 def plot_mrt_info(df):
     def plot_proximity_to_mrts(df):
+        df_filtered = df[df['distance_to_mrt'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
+        # Group by flat, count the number of schools within the proximity radius
+        df_grouped = df_filtered.groupby('flat_id').agg(
+            num_mrts_within_radius=('mrt_id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        ).reset_index()
         _, ax = plt.subplots() 
-        grouped_data = df.groupby('num_mrts_within_radius')['price_per_sqm'].median()
-        grouped_data.plot(kind='line')
-        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS}km')
-        ax.set_ylabel('Median Price Per Sqm (SGD)')
+        # Further group by mean to reduce clutter
+        df_grouped.plot(kind='line')
+        ax.set_xlabel(f'Number of MRT Stations within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
         plt.suptitle('')  # Suppress the automatic title
         save_plot_as_image(plt, 'num_mrts_within_radius')
         plt.close()
 
-    def plot_distance_to_mrt(df):
+    def plot_distance_to_nearest_mrt(df):
         _, ax = plt.subplots() 
+        nearest_mrts = df.groupby('flat_id').agg(
+            dist_to_nearest_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+        ).reset_index()
         # Aggregated scatter plot to reduce noise
-        df_filtered = df.dropna(subset=['nearest_mrt'])
-        bins = pd.cut(df_filtered['dist_to_nearest_mrt'], bins=np.arange(0, df_filtered['dist_to_nearest_mrt'].max() + 0.1, 0.1))
-        grouped = df_filtered.groupby(bins)['price_per_sqm'].median().reset_index()
+        bins = pd.cut(nearest_mrts['dist_to_nearest_mrt'], bins=np.arange(0, nearest_mrts['dist_to_nearest_mrt'].max() + 0.1, 0.1))
+        grouped = nearest_mrts.groupby(bins)['price_per_sqm'].mean().reset_index()
         # Get the mid-point of each interval for plotting
         grouped['dist_mid'] = grouped['dist_to_nearest_mrt'].apply(lambda x: x.mid)
         # Scatter plot
@@ -179,15 +187,18 @@ def plot_mrt_info(df):
         # Regression line
         sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')        
         ax.set_xlabel('Distance to Nearest MRT (km)')
-        ax.set_ylabel('Median Price Per Sqm (SGD)')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
         save_plot_as_image(plt, 'dist_to_nearest_mrt')
         plt.close()
-    
+
     def plot_different_mrts(df):
         _, ax = plt.subplots() 
-        df_filtered = df[df['dist_to_nearest_mrt'].notnull() & (df['dist_to_nearest_mrt'] < 2)]
-        # Group by 'nearest_mrt' and calculate median 'price_per_sqm', then sort by values
-        average_prices_by_mrt = df_filtered.groupby('nearest_mrt')['price_per_sqm'].median().sort_values(ascending=False)
+        df_filtered = df.groupby('flat_id').agg(
+            dist_to_nearest_mrt=('distance_to_mrt', 'min'),  # Minimum distance to MRT
+        ).reset_index()
+        df_filtered = df[df['dist_to_nearest_mrt'] < {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}]
+        # Group by 'nearest_mrt' and calculate mean 'price_per_sqm', then sort by values
+        average_prices_by_mrt = df_filtered.groupby('mrt')['price_per_sqm'].mean().sort_values(ascending=False)
         # Sort values and select the top n and bottom n
         n = 8
         top_mrts = average_prices_by_mrt.nlargest(n)
@@ -196,13 +207,13 @@ def plot_mrt_info(df):
         # Plot
         combined_mrts.plot(kind='bar')
         ax.set_xlabel('Nearest MRT Station')
-        ax.set_ylabel('Median Price Per Sqm (SGD)')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
         save_plot_as_image(plt, 'different_mrt_prices')
         plt.close()
 
     plot_proximity_to_mrts(df)
-    plot_distance_to_mrt(df)
+    plot_distance_to_nearest_mrt(df)
     plot_different_mrts(df)
 
 def plot_pri_sch_info(df):

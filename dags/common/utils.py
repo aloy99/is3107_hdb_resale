@@ -1,6 +1,6 @@
 import math
 from typing import List, Dict, Any
-from common.constants import PROXIMITY_RADIUS
+from common.constants import FETCHING_RADIUS
 
 def calc_dist(coord1, coord2):
     # Convert decimal degrees to radians 
@@ -23,7 +23,7 @@ def process_amenities(flat, df):
     nearest_amenities = []
     for _, amenity in df.iterrows():
         distance = calc_dist((flat['latitude'], flat['longitude']), (amenity['latitude'], amenity['longitude']))
-        if distance <= PROXIMITY_RADIUS:
+        if distance <= FETCHING_RADIUS:
             count += 1
             nearest_amenities.append({'flat_id': flat['id'], 'amenity_id': amenity['id'], 'distance': distance})
     return {'flat_id': flat['id'], 'count': count, 'nearest_amenities': nearest_amenities}

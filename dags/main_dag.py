@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 from common.columns import TABLE_META
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, PROXIMITY_RADIUS
+from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
 from common.utils import calc_dist, process_amenities
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
@@ -95,40 +95,38 @@ def hdb_pipeline():
     @task
     def get_mrts_within_radius():
         pg_hook = PostgresHook("resale_price_db")
-        # Fetch the recent resale price entries
+
         resale_prices_df = pg_hook.get_pandas_df("""
-            SELECT rp.id, rp.latitude, rp.longitude
-            FROM warehouse.int_resale_prices rp
-            LEFT JOIN warehouse.int_nearest_mrt nm
-            ON rp.id = nm.flat_id
-            WHERE nm.flat_id IS NULL;
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_mrt_within_radius IS NULL;
         """)
-
-        mrts_df = pg_hook.get_pandas_df("""
-            SELECT id, mrt, latitude, longitude
-            FROM warehouse.int_mrts;
-        """)
-
-        for _, flat in resale_prices_df.iterrows():
-            count_mrts = 0
-            for _, mrt in mrts_df.iterrows():
-                distance = calc_dist((flat['latitude'], flat['longitude']), (mrt['latitude'], mrt['longitude']))
-                min_dist = None
-                if distance <= PROXIMITY_RADIUS:
-                    count_mrts += 1
-                    if min_dist is None or distance < min_dist:
-                        min_dist = distance
-                # Persist details of nearest mrt to this flat
-                if min_dist:
-                    pg_hook.run("""
-                        INSERT INTO warehouse.int_nearest_mrt (flat_id, nearest_mrt_id, num_mrts_within_radius, distance)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (flat_id) DO UPDATE 
-                        SET nearest_mrt_id = EXCLUDED.nearest_mrt_id, 
-                            num_mrts_within_radius = EXCLUDED.num_mrts_within_radius, 
-                            distance = EXCLUDED.distance;
-                    """, parameters=(flat['id'], mrt['id'], count_mrts, min_dist))
-        print("Inserted nearest MRT stations for new resale prices into warehouse.int_nearest_mrt")
+        pri_school_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_mrts;")
+        results = []
+        with ThreadPoolExecutor(10) as executor:
+            future_to_flat = {executor.submit(process_amenities, flat, pri_school_df): flat for _, flat in resale_prices_df.iterrows()}
+            for future in as_completed(future_to_flat):
+                results.append(future.result())
+        insert_params = []
+        update_params = []
+        for result in results:
+            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
+            update_params.append((result['count'], result['flat_id']))
+        # Batch insertions
+        if insert_params:
+            pg_hook.insert_rows(
+                table = 'warehouse.int_nearest_mrts',
+                rows = insert_params,
+                target_fields = ['flat_id', 'mrt_id', 'distance'],
+                commit_every = 500
+            )
+        # Batch updates
+        for count, flat_id in update_params:
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_mrt_within_radius = %s
+                WHERE id = %s; 
+            """, parameters=(count, flat_id))
 
     @task
     def get_dist_from_cbd():
@@ -206,7 +204,7 @@ def hdb_pipeline():
             for _, park in parks_df.iterrows():
                 distance = calc_dist((flat['latitude'], flat['longitude']), (park['latitude'], park['longitude']))
                 min_dist = None
-                if distance <= PROXIMITY_RADIUS:
+                if distance <= FETCHING_RADIUS:
                     count += 1
                     if min_dist is None or distance < min_dist:
                         min_dist = distance
