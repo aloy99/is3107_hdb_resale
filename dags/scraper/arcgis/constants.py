@@ -1,0 +1,1 @@
+RESERVOIRS_QUERY_URL = "https://services5.arcgis.com/XqaKEQIgV03geG0E/arcgis/rest/services/Reservoirs/FeatureServer/0/query?where=1%3D1&returnGeometry=false&sqlFormat=none&f=pjson&token=&returnCentroid=true"

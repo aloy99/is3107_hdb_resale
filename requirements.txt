@@ -6,5 +6,6 @@ apache-airflow-providers-postgres
 reportlab
 matplotlib
 scipy
+pyproj
 html5lib
 seaborn
