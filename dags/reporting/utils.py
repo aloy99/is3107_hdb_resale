@@ -247,7 +247,7 @@ def plot_pri_sch_info(df):
 
     def plot_price_vs_school_type(df):
         df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
-        _, ax = plt.subplots(figsize=(10, 6))
+        _, ax = plt.subplots()
         sns.boxplot(x='type_code', y='price_per_sqm', data=df_filtered)
         ax.set_xlabel('School Type Code')
         ax.set_ylabel('Price per sqm (SGD)')
@@ -256,10 +256,10 @@ def plot_pri_sch_info(df):
 
     def plot_price_vs_school_nature(df):
         df_filtered = df[df['distance_to_school'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
-        _, ax = plt.subplots(figsize=(10, 6))
+        _, axes = plt.subplots()
         sns.boxplot(x='nature_code', y='price_per_sqm', data=df_filtered)
-        ax.set_xlabel('School Nature Code')
-        ax.set_ylabel('Price per sqm (SGD)')
+        axes.set_xlabel('School Nature Code')
+        axes.set_ylabel('Price per sqm (SGD)')
         save_plot_as_image(plt, 'resale_price_vs_school_nature')
         plt.close()
 
@@ -286,3 +286,50 @@ def plot_pri_sch_info(df):
     plot_price_vs_school_type(df)
     plot_price_vs_school_nature(df)
     plot_price_vs_special_programs(df)
+
+def plot_park_info(df):
+    def scatter_resale_price_distance_to_park(df):
+        _, ax = plt.subplots()
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(x='distance_to_park', y='resale_price', data=df)
+        ax.set_xlabel('Distance to Nearest Park (km)')
+        ax.set_ylabel('Resale Price (SGD)')
+        plt.legend(title='Number of Parks within Radius', bbox_to_anchor=(1.05, 1), loc=2)
+        save_plot_as_image(plt, 'resale_price_vs_dist_to_park')
+        plt.close()
+
+    # Average price per sqm for flats by number of nearby parks
+    def average_price_per_sqm_by_num_parks(df):
+        _, ax = plt.subplots()
+        df_filtered = df[df['distance_to_park'] < PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        # Group by flat, count the number of parks within the proximity radius
+        group_data = df_filtered.groupby('flat_id').agg(
+            num_parks_within_radius=('id', 'count'), 
+            price_per_sqm=('price_per_sqm', 'mean') 
+        )
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='num_parks_within_radius', y='price_per_sqm', data=group_data)
+        ax.set_xlabel('Number of Parks within Radius')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'num_parks_within_radius')
+        plt.close()
+    
+    def prices_near_specific_parks(df):
+        _, ax = plt.subplots()
+        df_near_parks = df[df['distance_to_park'] <= PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS]
+        # Group by park name and calculate average price per sqm
+        park_price_sqm = df_near_parks.groupby('park').agg(
+            average_price_per_sqm=('price_per_sqm', 'mean')
+        ).reset_index().sort_values(by='average_price_per_sqm', ascending=False)
+        # Plotting
+        plt.figure(figsize=(12, 6))
+        sns.barplot(x='average_price_per_sqm', y='park', data=park_price_sqm)
+        ax.set_xlabel('Average Price Per Sqm (SGD)')
+        ax.set_ylabel('Park')
+        plt.xticks(rotation=45)
+        save_plot_as_image(plt, 'prices_near_specific_parks')
+        plt.show()
+
+    scatter_resale_price_distance_to_park(df)
+    average_price_per_sqm_by_num_parks(df)
+    prices_near_specific_parks(df)

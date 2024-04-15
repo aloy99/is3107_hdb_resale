@@ -64,6 +64,18 @@ IMAGE_PATHS = {
     'resale_price_vs_special_programs': {
          'title': 'Price per sqm by Special Programs',
          'path': './resale_price_vs_special_programs.png'
+     },
+    'resale_price_vs_dist_to_park': {
+         'title': 'Resale Price vs. Distance to Nearest Park',
+         'path': './resale_price_vs_dist_to_park.png'
+     },
+    'num_parks_within_radius': {
+         'title': f'Average Price Per Sqm by Number of Parks within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS} meters',
+         'path': './num_parks_within_radius.png'
+     },
+    'prices_near_specific_parks': {
+         'title': f'Average Price Per Sqm Near Parks within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS} meters',
+         'path': './prices_near_specific_parks.png'
      }
 }
 
