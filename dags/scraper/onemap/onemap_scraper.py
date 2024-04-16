@@ -66,4 +66,12 @@ class OnemapScraper(BaseScraper):
             results = list(executor.map(self.scrape_address_postal_coords, address_list))
         new_data[['latitude', 'longitude', 'postal']] = pd.DataFrame(results, index=new_data.index) if results else None
         return new_data
+    
+    def enhance_supermarket(self, data: pd.DataFrame) -> pd.DataFrame:
+        new_data = data.copy()
+        address_list = list(map(lambda x: x[-7:-1], new_data['premise_address']))
+        with ThreadPoolExecutor(10) as executor:
+            results = list(executor.map(self.scrape_address_postal_coords, address_list))
+        new_data[['latitude', 'longitude', 'postal']] = pd.DataFrame(results, index=new_data.index) if results else None
+        return new_data
 

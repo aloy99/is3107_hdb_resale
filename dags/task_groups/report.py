@@ -4,7 +4,7 @@ from airflow.decorators import  task, task_group
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.email_operator import EmailOperator
 
-from reporting.utils import plot_default_features, plot_mrt_info, plot_pri_sch_info, plot_park_info, create_html_report
+from reporting.utils import plot_default_features, plot_mrt_info, plot_pri_sch_info, plot_park_info, plot_supermarket_info, create_html_report
 from data_preparation.utils import clean_resale_prices_for_visualisation
 
 
@@ -52,11 +52,23 @@ def report_tasks():
             JOIN warehouse.int_nearest_parks np ON rp.id = np.flat_id
             JOIN warehouse.int_parks parks ON np.park_id = parks.id;
         """)
+        supermarkets_df = pg_hook.get_pandas_df("""
+            SELECT
+                rp.id as flat_id,
+                rp.resale_price,
+                rp.floor_area_sqm,
+                supermarkets.id,
+                np.distance as distance_to_supermarket
+            FROM warehouse.int_resale_prices rp
+            JOIN warehouse.int_nearest_supermarkets np ON rp.id = np.flat_id
+            JOIN warehouse.int_supermarkets supermarkets ON np.supermarket_id = supermarkets.id;
+        """)
         all_dfs = {
             'resale_prices': resale_prices_df,
             'mrt_prices': mrt_prices_df,
             'pri_sch_prices': pri_sch_prices_df,
-            'parks_prices': parks_df
+            'parks_prices': parks_df,
+            'supermarket_prices': supermarkets_df
         }
         # Clean and standardise data
         for key in all_dfs:
@@ -69,6 +81,7 @@ def report_tasks():
         plot_mrt_info(df_set['mrt_prices'])
         plot_pri_sch_info(df_set['pri_sch_prices'])
         plot_park_info(df_set['parks_prices'])
+        plot_supermarket_info(df_set['supermarket_prices'])
         # Paste images in report
         return create_html_report()
 

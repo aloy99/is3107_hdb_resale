@@ -216,6 +216,40 @@ def hdb_pipeline():
                 SET num_park_within_radius = %s
                 WHERE id = %s; 
             """, parameters=(count, flat_id))
+    @task
+    def get_supermarkets_within_radius():
+        pg_hook = PostgresHook("resale_price_db")
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT id, latitude, longitude
+            FROM warehouse.int_resale_prices
+            WHERE num_supermarkets_within_radius IS NULL;
+        """)
+        supermarket_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_supermarkets;")
+        results = []
+        with ThreadPoolExecutor(10) as executor:
+            future_to_flat = {executor.submit(process_amenities, flat, supermarket_df): flat for _, flat in resale_prices_df.iterrows()}
+            for future in as_completed(future_to_flat):
+                results.append(future.result())
+        insert_params = []
+        update_params = []
+        for result in results:
+            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
+            update_params.append((result['count'], result['flat_id']))
+        # Batch insertions
+        if insert_params:
+            pg_hook.insert_rows(
+                table = 'warehouse.int_nearest_supermarkets',
+                rows = insert_params,
+                target_fields = ['flat_id', 'supermarket_id', 'distance'],
+                commit_every = 500
+            )
+        # Batch updates
+        for count, flat_id in update_params:
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET num_supermarkets_within_radius = %s
+                WHERE id = %s; 
+            """, parameters=(count, flat_id))
             
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
@@ -223,10 +257,11 @@ def hdb_pipeline():
     get_mrts_within_radius_ = get_mrts_within_radius()
     get_pri_schs_within_radius_ = get_pri_schs_within_radius()
     get_parks_within_radius_ = get_parks_within_radius()
+    get_supermarkets_within_radius_ = get_supermarkets_within_radius()
     get_dist_from_cbd_ = get_dist_from_cbd()
 
     # Pipeline order
-    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_dist_from_cbd_
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
     get_dist_from_cbd_ >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()

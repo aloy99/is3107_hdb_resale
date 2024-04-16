@@ -40,3 +40,8 @@ PARK_FIELDS = [
     "longitude"
 ]
 
+SUPERMARKET_DATASET_ID = "d_1bf762ee1d6d7fb61192cb442fb2f5b4"
+SUPERMARKET_FIELDS = [
+    "business_name",
+    "premise_address"
+]
