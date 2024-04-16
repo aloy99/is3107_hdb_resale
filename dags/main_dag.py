@@ -36,7 +36,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        resale_price_scraper = ResalePriceScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
+        resale_price_scraper = ResalePriceScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(resale_price_scraper.run_scrape(date), start=0):
