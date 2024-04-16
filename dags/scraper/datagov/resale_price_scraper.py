@@ -49,7 +49,7 @@ class ResalePriceScraper(BaseScraper):
         return data, data['result']['records']
     
     def run_scrape(self, current_date: datetime):
-        if self.mode == 'backfill':
+        if self.mode == 'live':
             return self.run_scrape_backfill()
         else:
             return self.run_scrape_live(current_date)
