@@ -47,7 +47,7 @@ class OnemapScraper(BaseScraper):
             for key in location_data:
                 location_data[key] = data['results'][0].get(key.upper())
             return location_data
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, AttributeError):
             logger.info(f'No results found for address {address}')
             return location_data
         
