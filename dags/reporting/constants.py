@@ -73,10 +73,6 @@ IMAGE_PATHS = {
          'title': f'Top and Bottom Parks by Average Price Per Sqm within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km',
          'path': './prices_near_specific_parks.png'
      },
-     'num_supermarkets_within_radius': {
-         'title': f'Average Price Per Sqm by Number of Supermarkets within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS} meters',
-         'path': './num_supermarkets_within_radius.png'
-     },
      'dist_to_nearest_supermarket': {
          'title': 'Price per sqm vs. Distance to Nearest Supermarket',
          'path': './dist_to_nearest_supermarket.png'
