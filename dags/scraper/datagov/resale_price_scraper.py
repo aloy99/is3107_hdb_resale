@@ -49,12 +49,13 @@ class ResalePriceScraper(BaseScraper):
         return data, data['result']['records']
     
     def run_scrape(self, current_date: datetime):
-        if self.mode == 'live':
+        if self.mode == 'backfill':
             return self.run_scrape_backfill()
         else:
             return self.run_scrape_live(current_date)
 
     def run_scrape_backfill(self):
+        print("UFHEIJFPJWJFBNIWBIEUByoyoyoyoyoyyoyoyo")
         params = {} if not DEV_MODE else {'limit': DEV_REDUCED_ROWS}
         response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), params)
         collections_data = response.json()
