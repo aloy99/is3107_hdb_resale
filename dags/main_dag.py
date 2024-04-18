@@ -15,7 +15,7 @@ import dask.dataframe as dd
 
 from common.columns import TABLE_META
 from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
-from common.utils import calc_dist, process_amenities, process_amenities_dask_partition, process_amenities_ball_tree
+from common.utils import calc_dist, process_amenities_ball_tree
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 
