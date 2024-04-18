@@ -1,5 +1,6 @@
 from contextlib import closing
 from datetime import datetime, timedelta
+from functools import partial
 
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
@@ -10,10 +11,11 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
+import dask.dataframe as dd
 
 from common.columns import TABLE_META
 from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
-from common.utils import calc_dist, process_amenities
+from common.utils import calc_dist, process_amenities, process_amenities_dask_partition, process_amenities_ball_tree
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 
@@ -96,37 +98,34 @@ def hdb_pipeline():
     def get_mrts_within_radius():
         pg_hook = PostgresHook("resale_price_db")
 
-        resale_prices_df = pg_hook.get_pandas_df("""
+        resale_prices_df = dd.from_pandas(pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
-            WHERE num_mrt_within_radius IS NULL;
-        """)
-        pri_school_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_mrts;")
-        results = []
-        with ThreadPoolExecutor(10) as executor:
-            future_to_flat = {executor.submit(process_amenities, flat, pri_school_df): flat for _, flat in resale_prices_df.iterrows()}
-            for future in as_completed(future_to_flat):
-                results.append(future.result())
-        insert_params = []
-        update_params = []
-        for result in results:
-            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
-            update_params.append((result['count'], result['flat_id']))
-        # Batch insertions
-        if insert_params:
-            pg_hook.insert_rows(
+            WHERE num_mrt_within_radius IS NULL;                                                    
+        """), chunksize = 5000)
+        mrt_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_mrts;")
+        meta_df = pd.DataFrame({
+            'flat_id': pd.Series(dtype = 'int'),
+            'count': pd.Series(dtype = 'int'),
+            'nearest_amenities': pd.Series(dtype = 'object'),
+            'distances': pd.Series(dtype = 'object')
+        })
+        res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = mrt_df), meta=meta_df)
+        res = res.compute()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        pg_hook.insert_rows(
                 table = 'warehouse.int_nearest_mrts',
-                rows = insert_params,
+                rows = nearest_amenities,
                 target_fields = ['flat_id', 'mrt_id', 'distance'],
                 commit_every = 500
             )
-        # Batch updates
-        for count, flat_id in update_params:
+        for _, row in res.iterrows():
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
                 SET num_mrt_within_radius = %s
                 WHERE id = %s; 
-            """, parameters=(count, flat_id))
+            """, parameters=(row['count'], row['flat_id']))
+            
 
     @task
     def get_dist_from_cbd():
@@ -150,106 +149,97 @@ def hdb_pipeline():
     @task
     def get_pri_schs_within_radius():
         pg_hook = PostgresHook("resale_price_db")
-        resale_prices_df = pg_hook.get_pandas_df("""
+        resale_prices_df = dd.from_pandas(pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
             WHERE num_pri_sch_within_radius IS NULL;
-        """)
+        """), chunksize = 5000)
         pri_school_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_pri_schools;")
-        results = []
-        with ThreadPoolExecutor(10) as executor:
-            future_to_flat = {executor.submit(process_amenities, flat, pri_school_df): flat for _, flat in resale_prices_df.iterrows()}
-            for future in as_completed(future_to_flat):
-                results.append(future.result())
-        insert_params = []
-        update_params = []
-        for result in results:
-            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
-            update_params.append((result['count'], result['flat_id']))
-        # Batch insertions
-        if insert_params:
-            pg_hook.insert_rows(
-                table = 'warehouse.int_nearest_pri_schools',
-                rows = insert_params,
-                target_fields = ['flat_id', 'pri_sch_id', 'distance'],
-                commit_every = 500
-            )
-        # Batch updates
-        for count, flat_id in update_params:
+
+        meta_df = pd.DataFrame({
+            'flat_id': pd.Series(dtype = 'int'),
+            'count': pd.Series(dtype = 'int'),
+            'nearest_amenities': pd.Series(dtype = 'object'),
+            'distances': pd.Series(dtype = 'object')
+        })
+        res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = pri_school_df), meta=meta_df)
+        res = res.compute()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        pg_hook.insert_rows(
+            table = 'warehouse.int_nearest_pri_schools',
+            rows = nearest_amenities,
+            target_fields = ['flat_id', 'pri_sch_id', 'distance'],
+            commit_every = 500
+        )
+        for _, row in res.iterrows():
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
                 SET num_pri_sch_within_radius = %s
                 WHERE id = %s; 
-            """, parameters=(count, flat_id))
+            """, parameters=(row['count'], row['flat_id']))
 
     @task
     def get_parks_within_radius():
         pg_hook = PostgresHook("resale_price_db")
-        resale_prices_df = pg_hook.get_pandas_df("""
+        resale_prices_df = dd.from_pandas(pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
             WHERE num_park_within_radius IS NULL;
-        """)
+        """), chunksize = 5000)
         park_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_parks;")
-        results = []
-        with ThreadPoolExecutor(10) as executor:
-            future_to_flat = {executor.submit(process_amenities, flat, park_df): flat for _, flat in resale_prices_df.iterrows()}
-            for future in as_completed(future_to_flat):
-                results.append(future.result())
-        insert_params = []
-        update_params = []
-        for result in results:
-            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
-            update_params.append((result['count'], result['flat_id']))
-        # Batch insertions
-        if insert_params:
-            pg_hook.insert_rows(
-                table = 'warehouse.int_nearest_parks',
-                rows = insert_params,
-                target_fields = ['flat_id', 'park_id', 'distance'],
-                commit_every = 500
-            )
+        meta_df = pd.DataFrame({
+            'flat_id': pd.Series(dtype = 'int'),
+            'count': pd.Series(dtype = 'int'),
+            'nearest_amenities': pd.Series(dtype = 'object'),
+            'distances': pd.Series(dtype = 'object')
+        })
+        res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = park_df), meta=meta_df)
+        res = res.compute()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        pg_hook.insert_rows(
+            table = 'warehouse.int_nearest_parks',
+            rows = nearest_amenities,
+            target_fields = ['flat_id', 'park_id', 'distance'],
+            commit_every = 500
+        )
         # Batch updates
-        for count, flat_id in update_params:
+        for _, row in res.iterrows():
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
                 SET num_park_within_radius = %s
                 WHERE id = %s; 
-            """, parameters=(count, flat_id))
+            """, parameters=(row['count'], row['flat_id']))
     @task
     def get_supermarkets_within_radius():
         pg_hook = PostgresHook("resale_price_db")
-        resale_prices_df = pg_hook.get_pandas_df("""
+        resale_prices_df = dd.from_pandas(pg_hook.get_pandas_df("""
             SELECT id, latitude, longitude
             FROM warehouse.int_resale_prices
             WHERE num_supermarkets_within_radius IS NULL;
-        """)
+        """), chunksize = 5000)
         supermarket_df = pg_hook.get_pandas_df("SELECT * FROM warehouse.int_supermarkets;")
-        results = []
-        with ThreadPoolExecutor(10) as executor:
-            future_to_flat = {executor.submit(process_amenities, flat, supermarket_df): flat for _, flat in resale_prices_df.iterrows()}
-            for future in as_completed(future_to_flat):
-                results.append(future.result())
-        insert_params = []
-        update_params = []
-        for result in results:
-            insert_params.extend([(res['flat_id'], res['amenity_id'], res['distance']) for res in result['nearest_amenities']])
-            update_params.append((result['count'], result['flat_id']))
-        # Batch insertions
-        if insert_params:
-            pg_hook.insert_rows(
-                table = 'warehouse.int_nearest_supermarkets',
-                rows = insert_params,
-                target_fields = ['flat_id', 'supermarket_id', 'distance'],
-                commit_every = 500
-            )
+        meta_df = pd.DataFrame({
+            'flat_id': pd.Series(dtype = 'int'),
+            'count': pd.Series(dtype = 'int'),
+            'nearest_amenities': pd.Series(dtype = 'object'),
+            'distances': pd.Series(dtype = 'object')
+        })
+        res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = supermarket_df), meta=meta_df)
+        res = res.compute()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        pg_hook.insert_rows(
+            table = 'warehouse.int_nearest_supermarkets',
+            rows = nearest_amenities,
+            target_fields = ['flat_id', 'supermarket_id', 'distance'],
+            commit_every = 500
+        )
         # Batch updates
-        for count, flat_id in update_params:
+        for _, row in res.iterrows():
             pg_hook.run("""
                 UPDATE warehouse.int_resale_prices
                 SET num_supermarkets_within_radius = %s
                 WHERE id = %s; 
-            """, parameters=(count, flat_id))
+            """, parameters=(row['count'], row['flat_id']))
             
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
@@ -261,7 +251,7 @@ def hdb_pipeline():
     get_dist_from_cbd_ = get_dist_from_cbd()
 
     # Pipeline order
-    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_ >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_  >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
     get_dist_from_cbd_ >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()

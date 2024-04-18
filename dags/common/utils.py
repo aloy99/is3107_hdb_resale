@@ -1,6 +1,10 @@
 import math
 from typing import List, Dict, Any
 from common.constants import FETCHING_RADIUS
+import pandas as pd
+import dask.dataframe as dd
+from sklearn.neighbors import BallTree, KDTree
+import numpy as np
 
 def calc_dist(coord1, coord2):
     # Convert decimal degrees to radians 
@@ -27,3 +31,21 @@ def process_amenities(flat, df):
             count += 1
             nearest_amenities.append({'flat_id': flat['id'], 'amenity_id': amenity['id'], 'distance': distance})
     return {'flat_id': flat['id'], 'count': count, 'nearest_amenities': nearest_amenities}
+
+def process_amenities_ball_tree(flat_df, amenity_df):
+    #BallTree to find number of neighbours within radius, significantly faster than brute force
+    ball = BallTree(np.deg2rad(amenity_df[['latitude', 'longitude']].values), metric='haversine')
+    
+    indices_within_radius, distances  = ball.query_radius(np.deg2rad(flat_df[['latitude', 'longitude']].values), r=FETCHING_RADIUS/6371, return_distance=True)
+    
+    count_within_radius = np.array([len(indices) for indices in indices_within_radius])
+    
+    result_df = pd.DataFrame({'flat_id': flat_df['id'], 'count': count_within_radius}, dtype=np.int32)
+    
+    nearest_amenities = [amenity_df.iloc[indices]['id'] for indices in indices_within_radius]
+    result_df['nearest_amenities'] = nearest_amenities
+
+    distances_within_radius = [d * 6371 for d in distances]
+    result_df['distances'] = distances_within_radius
+    
+    return result_df
