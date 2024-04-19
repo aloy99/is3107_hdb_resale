@@ -42,7 +42,7 @@ def process_amenities_ball_tree(flat_df, amenity_df):
     
     result_df = pd.DataFrame({'flat_id': flat_df['id'], 'count': count_within_radius}, dtype=np.int32)
     
-    nearest_amenities = [amenity_df.iloc[indices]['id'] for indices in indices_within_radius]
+    nearest_amenities = [amenity_df.iloc[indices]['id'].tolist() for indices in indices_within_radius]
     result_df['nearest_amenities'] = nearest_amenities
 
     distances_within_radius = [d * 6371 for d in distances]

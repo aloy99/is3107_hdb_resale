@@ -38,7 +38,7 @@ def hdb_pipeline():
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        resale_price_scraper = ResalePriceScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
+        resale_price_scraper = ResalePriceScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for idx, rows in enumerate(resale_price_scraper.run_scrape(date), start=0):
@@ -112,7 +112,9 @@ def hdb_pipeline():
         })
         res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = mrt_df), meta=meta_df)
         res = res.compute()
-        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_csv('testing.csv')
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].dropna().to_numpy().tolist()
+        
         pg_hook.insert_rows(
                 table = 'warehouse.int_nearest_mrts',
                 rows = nearest_amenities,
@@ -164,7 +166,7 @@ def hdb_pipeline():
         })
         res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = pri_school_df), meta=meta_df)
         res = res.compute()
-        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].dropna().to_numpy().tolist()
         pg_hook.insert_rows(
             table = 'warehouse.int_nearest_pri_schools',
             rows = nearest_amenities,
@@ -195,7 +197,7 @@ def hdb_pipeline():
         })
         res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = park_df), meta=meta_df)
         res = res.compute()
-        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].dropna().to_numpy().tolist()
         pg_hook.insert_rows(
             table = 'warehouse.int_nearest_parks',
             rows = nearest_amenities,
@@ -226,7 +228,7 @@ def hdb_pipeline():
         })
         res = resale_prices_df.map_partitions(partial(process_amenities_ball_tree, amenity_df = supermarket_df), meta=meta_df)
         res = res.compute()
-        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].to_numpy().tolist()
+        nearest_amenities = res.explode(['nearest_amenities', 'distances']).reset_index(drop=True)[['flat_id','nearest_amenities','distances']].dropna().to_numpy().tolist()
         pg_hook.insert_rows(
             table = 'warehouse.int_nearest_supermarkets',
             rows = nearest_amenities,
