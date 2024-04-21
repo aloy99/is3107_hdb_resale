@@ -1,6 +1,7 @@
 from contextlib import closing
 from datetime import datetime, timedelta
 from functools import partial
+import logging
 
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
@@ -20,6 +21,8 @@ from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 
 from task_groups.report import report_tasks
+
+logger = logging.getLogger(__name__)
 
 default_args = {
     "owner": "airflow",
@@ -44,23 +47,25 @@ def hdb_pipeline():
         for idx, rows in enumerate(resale_price_scraper.run_scrape(date), start=0):
             if DEV_MODE and idx == DEV_REDUCED_ROWS: break
             # necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
-            with closing(pg_hook.get_conn()) as conn:
-                if pg_hook.supports_autocommit:
-                    pg_hook.set_autocommit(conn, True)
-                with closing(conn.cursor()) as cursor:
-                    cursor.execute(
-                        f"""
-                        INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
-                        VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-                        ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
-                        RETURNING id;
-                        """,
-                        [val for row in rows for val in row]
-                    )
-                    curr_id = cursor.fetchone()
-                    if curr_id:
-                        first_id = first_id if first_id else curr_id
-                        first_id = min(first_id, curr_id)
+            if rows:
+                with closing(pg_hook.get_conn()) as conn:
+                    if pg_hook.supports_autocommit:
+                        pg_hook.set_autocommit(conn, True)
+                    with closing(conn.cursor()) as cursor:
+                        print(rows)
+                        cursor.execute(
+                            f"""
+                            INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
+                            VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
+                            ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
+                            RETURNING id;
+                            """,
+                            [val for row in rows for val in row]
+                        )
+                        curr_id = cursor.fetchone()
+                        if curr_id:
+                            first_id = first_id if first_id else curr_id
+                            first_id = min(first_id, curr_id)
         return first_id[0] if first_id else first_id
 
     @task
@@ -81,6 +86,7 @@ def hdb_pipeline():
         enhanced_rows['latitude'] = pd.to_numeric(enhanced_rows['latitude'], errors='coerce')
         enhanced_rows['longitude'] = pd.to_numeric(enhanced_rows['longitude'], errors='coerce')
         # Drop rows without location data
+        logger.info(f"Percentage of rows without successful match in OneMap: {enhanced_rows['latitude'].isnull().sum() * 100 / len(enhanced_rows)}")
         enhanced_rows = enhanced_rows[(enhanced_rows['latitude'].notna()) & (enhanced_rows['longitude'].notna())]
         # Persist to data warehouse
         records = [list(row) for row in enhanced_rows.itertuples(index=False)] 

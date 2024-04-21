@@ -31,9 +31,9 @@ def clean_resale_prices_for_visualisation(df):
                 row['remaining_lease'] = years
             # 2. Impute NaN values
             elif pd.isna(row['remaining_lease']):
-                lease_commencement_year = int(row['lease_commence_date'])
-                sale_year = row['month'].year
-                sale_month = row['month'].month
+                lease_commencement_year = int(row['lease_commence_date'].year)
+                sale_year = row['transaction_month'].year
+                sale_month = row['transaction_month'].month
                 total_months = (sale_year - lease_commencement_year) * 12 + sale_month - 1
                 remaining_years = 99 - (total_months / 12)
                 row['remaining_lease'] = remaining_years
