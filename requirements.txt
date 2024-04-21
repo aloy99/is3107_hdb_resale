@@ -12,3 +12,5 @@ seaborn
 dask
 rtree
 scikit-learn
+mlflow
+statsmodels

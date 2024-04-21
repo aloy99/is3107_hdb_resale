@@ -21,6 +21,7 @@ from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
 
 from task_groups.report import report_tasks
+from task_groups.ml import ml_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,6 @@ def hdb_pipeline():
 
     # Pipeline order
     scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_  >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
-    get_dist_from_cbd_ >> report_tasks()
+    get_dist_from_cbd_ >> [report_tasks(), ml_tasks()]
 
 hdb_pipeline_dag = hdb_pipeline()

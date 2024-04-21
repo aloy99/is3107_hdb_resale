@@ -77,6 +77,14 @@ IMAGE_PATHS = {
          'title': 'Price per sqm vs. Distance to Nearest Supermarket',
          'path': './dist_to_nearest_supermarket.png'
      },
+     'linear_regression_scatter_plot': {
+         'title': 'Observed vs Predicted Prices for Linear Regression',
+         'path': './linear_regression_scatter_plot.png'
+     },
+     'linear_regression_feature_importance': {
+         'title': 'Feature Importance for Linear Regression',
+         'path': './linear_regression_feature_importance.png'
+     },
 }
 
 HTML_PATH = './report.html'
