@@ -1,5 +1,7 @@
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 from data_preparation.constants import REPLACE_FLAT_MODEL_VALUES
+import time
 
 def clean_resale_prices_for_visualisation(df):
     # Calculate price per sqm
@@ -41,5 +43,51 @@ def clean_resale_prices_for_visualisation(df):
         df = df.apply(impute_remaining_lease, axis=1)
         print("Standarised and imputed remaining lease values.\n", df.info())
             
+    # Returned cleaned data
+    return df
+
+
+def clean_resale_prices_for_ml(df):
+
+    df = clean_resale_prices_for_visualisation(df)
+
+    # label encode storeys
+    df = df.sort_values(by='storey_range')
+    df['storey_range'] = df['storey_range'].astype('category').cat.codes # label encode
+
+    # remove flat types with very few cases
+    df = df[~df['flat_type'].isin(['MULTI-GENERATION', 'MULTI GENERATION', '1 ROOM'])]
+
+    # Re-categorize flat model to reduce num classes
+    replace_values = {'Executive Maisonette':'Maisonette', 'Terrace':'Special', 'Adjoined flat':'Special',
+                        'Type S1S2':'Special', 'DBSS':'Special', 'Model A2':'Model A', 'Premium Apartment':'Apartment', 'Improved':'Standard', 'Simplified':'Model A', '2-room':'Standard'}
+    df = df.replace({'flat_model': replace_values})
+
+    # Label encode flat type
+    replace_values = {'2 ROOM':0, '3 ROOM':1, '4 ROOM':2, '5 ROOM':3, 'EXECUTIVE':4}
+    df = df.replace({'flat_type': replace_values})
+    d#f['flat_type'] = df['flat_type'].astype(int)
+    # Change lease commence date type to scalable int
+    df['lease_commence_date'] = df['lease_commence_date'].apply(lambda x: time.mktime(x.timetuple()))
+
+    df = df.reset_index(drop=True)
+
+    ## dummy encoding
+    df = pd.get_dummies(df, columns=['flat_model'], prefix=['model'])
+    df = df.drop('model_Standard',axis=1) # remove standard, setting it as the baseline
+
+    scaler = StandardScaler()
+
+    # fit to continuous columns and transform
+    scaled_columns = ['floor_area_sqm','lease_commence_date','num_pri_sch_within_radius','num_mrt_within_radius','num_park_within_radius','num_supermarkets_within_radius']
+    scaler.fit(df[scaled_columns])
+    scaled_columns = pd.DataFrame(scaler.transform(df[scaled_columns]), index=df.index, columns=scaled_columns)
+
+    # separate unscaled features
+    unscaled_columns = df.drop(scaled_columns, axis=1)
+
+    # concatenate scaled and unscaled features
+    df = pd.concat([scaled_columns,unscaled_columns], axis=1)
+
     # Returned cleaned data
     return df
