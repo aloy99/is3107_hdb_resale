@@ -9,3 +9,6 @@ scipy
 pyproj
 html5lib
 seaborn
+dask
+rtree
+scikit-learn

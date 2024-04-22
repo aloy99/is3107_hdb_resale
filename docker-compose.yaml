@@ -114,6 +114,9 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pw
       POSTGRES_DB: resale_price_proj
+      POSTGRES_MAX_CONNECTIONS: 800
+      POSTGRES_WORK_MEM: "4MB"
+      POSTGRES_MAINTENANCE_WORK_MEM: "256MB"
     volumes:
       - postgres-db-warehouse-vol:/var/lib/postgresql/data
     healthcheck:

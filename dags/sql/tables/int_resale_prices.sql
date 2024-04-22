@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS warehouse.int_resale_prices(
     distance_from_cbd FLOAT,
     num_pri_sch_within_radius INT,
     num_mrt_within_radius INT,
-    num_park_within_radius INT
+    num_park_within_radius INT,
+    num_supermarkets_within_radius INT
 )

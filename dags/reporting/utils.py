@@ -325,3 +325,27 @@ def plot_park_info(df):
 
     average_price_per_sqm_by_num_parks(df)
     prices_near_specific_parks(df)
+
+def plot_supermarket_info(df):
+    
+    def plot_distance_to_nearest_supermarket(df):
+        _, ax = plt.subplots() 
+        nearest_supermarkets = df.groupby('flat_id').agg(
+            distance_to_supermarket=('distance_to_supermarket', 'min'),  # Minimum distance to supermarket
+            price_per_sqm=('price_per_sqm', 'mean')  # Average price per sqm
+        ).reset_index()
+        # Use quantile-based binning or user-defined intervals
+        bin_edges = np.quantile(nearest_supermarkets['distance_to_supermarket'], np.linspace(0, 1, num=10))
+        bins = pd.cut(nearest_supermarkets['distance_to_supermarket'], bins=bin_edges, include_lowest=True)
+        grouped = nearest_supermarkets.groupby(bins)['price_per_sqm'].mean().reset_index()
+        grouped['dist_mid'] = grouped['distance_to_supermarket'].apply(lambda x: x.mid)
+        sns.scatterplot(x='dist_mid', y='price_per_sqm', data=grouped, alpha=0.6)
+        sns.regplot(x='dist_mid', y='price_per_sqm', data=grouped, scatter=False, color='red')
+        ax.set_xlabel('Distance to Nearest supermarket (km)')
+        ax.set_ylabel('Average Price Per Sqm (SGD)')
+        save_plot_as_image(plt, 'dist_to_nearest_supermarket')
+        plt.show()
+
+    plot_distance_to_nearest_supermarket(df)
+
+
