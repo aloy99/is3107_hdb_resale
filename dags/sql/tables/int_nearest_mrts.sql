@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS warehouse.int_nearest_mrts (
-  id SERIAL PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   flat_id INT NOT NULL,
   mrt_id INT NOT NULL,
   distance FLOAT NOT NULL,

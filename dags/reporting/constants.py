@@ -72,7 +72,11 @@ IMAGE_PATHS = {
     'prices_near_specific_parks': {
          'title': f'Top and Bottom Parks by Average Price Per Sqm within {PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS}km',
          'path': './prices_near_specific_parks.png'
-     }
+     },
+     'dist_to_nearest_supermarket': {
+         'title': 'Price per sqm vs. Distance to Nearest Supermarket',
+         'path': './dist_to_nearest_supermarket.png'
+     },
 }
 
 HTML_PATH = './report.html'

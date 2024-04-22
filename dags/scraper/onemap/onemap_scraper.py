@@ -47,7 +47,7 @@ class OnemapScraper(BaseScraper):
             for key in location_data:
                 location_data[key] = data['results'][0].get(key.upper())
             return location_data
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, AttributeError):
             logger.info(f'No results found for address {address}')
             return location_data
         
@@ -62,6 +62,14 @@ class OnemapScraper(BaseScraper):
     def enhance_pri_school(self, data: pd.DataFrame) -> pd.DataFrame:
         new_data = data.copy()
         address_list = new_data['postal_code'].to_list()
+        with ThreadPoolExecutor(10) as executor:
+            results = list(executor.map(self.scrape_address_postal_coords, address_list))
+        new_data[['latitude', 'longitude', 'postal']] = pd.DataFrame(results, index=new_data.index) if results else None
+        return new_data
+    
+    def enhance_supermarket(self, data: pd.DataFrame) -> pd.DataFrame:
+        new_data = data.copy()
+        address_list = list(map(lambda x: x[-7:-1], new_data['premise_address']))
         with ThreadPoolExecutor(10) as executor:
             results = list(executor.map(self.scrape_address_postal_coords, address_list))
         new_data[['latitude', 'longitude', 'postal']] = pd.DataFrame(results, index=new_data.index) if results else None

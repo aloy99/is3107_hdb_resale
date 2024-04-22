@@ -21,6 +21,7 @@ def get_mrt_opening_dates():
         df['opening_date'] = df['opening_date'].transform(lambda x: pd.to_datetime(re.sub("\[[0-9]+\]", '', x), format="%d %B %Y", errors="coerce"))
         df = df.dropna(subset = ['opening_date'])
         df = df[df['opening_date'] < pd.Timestamp.now()]
+        df['opening_date'] = df['opening_date'].dt.date
         return df
     else:
         print(f"Failed to retrieve MRT opening dates: {response.status_code}")

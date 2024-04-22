@@ -34,10 +34,18 @@ class ResalePriceScraper(BaseScraper):
             url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next').split("&filters")[0]
 
             if records:
-                yield [self._row_handler(row) for row in records]
+                #yield [self._row_handler(row) for row in records]
+                yield [row for row in self._records_handler(records)]
+
+
+    def _records_handler(self, records: Mapping[str, Any]) -> Generator[Mapping[str,Any], None, None]:
+        for row in records:
+            res = self._row_handler(row)
+            if res:
+                yield res
     
     def _row_handler(self, row: Mapping[str, Any]) -> Sequence[Any]:
-        return tuple(row.get(field, None) for field in RESALE_PRICE_FIELDS)
+        return tuple(row.get(field, None) for field in RESALE_PRICE_FIELDS) if row.get("month",None) >= "2009-01" else None
 
     
     @backoff.on_exception(backoff.expo,
@@ -55,6 +63,7 @@ class ResalePriceScraper(BaseScraper):
             return self.run_scrape_live(current_date)
 
     def run_scrape_backfill(self):
+        print("UFHEIJFPJWJFBNIWBIEUByoyoyoyoyoyyoyoyo")
         params = {} if not DEV_MODE else {'limit': DEV_REDUCED_ROWS}
         response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), params)
         collections_data = response.json()
