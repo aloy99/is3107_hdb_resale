@@ -8,13 +8,17 @@ from datetime import datetime
 
 import base64
 
-from reporting.constants import IMAGE_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE
+from reporting.constants import IMAGE_PATHS, METRIC_PATHS, HTML_PATH, HTML_START, HTML_END, PLOT_TEMPLATE, METRIC_TEMPLATE
 from common.constants import FETCHING_RADIUS, PROXIMITY_RADIUS_FOR_FILTERED_ANALYSIS
 
 def save_plot_as_image(plt, plot_name):
     plt.title(IMAGE_PATHS[plot_name]['title'])
     plt.tight_layout()
-    plt.savefig( IMAGE_PATHS[plot_name]['path'])
+    plt.savefig(IMAGE_PATHS[plot_name]['path'])
+
+def save_table_as_html(df, metric_name):
+    with open(METRIC_PATHS[metric_name]['path'], 'w') as f:
+        f.write(df.to_html())
 
 def create_html_report():
     report_body = HTML_START.format(date = datetime.today().strftime('%Y-%m-%d')).strip()
@@ -22,6 +26,10 @@ def create_html_report():
         data_uri = base64.b64encode(open(item['path'], 'rb').read()).decode('utf-8')
         img_tag = '<img src="data:image/png;base64,{0}">'.format(data_uri)
         curr_row = PLOT_TEMPLATE.format(image = img_tag, caption = item['title'])
+        report_body += curr_row
+    for metric in METRIC_PATHS.values():
+        metrics_table = open(metric['path'], 'r').read()
+        curr_row = METRIC_TEMPLATE.format(table = metrics_table)
         report_body += curr_row
     report_body += HTML_END.strip()
     with open(HTML_PATH, 'w') as f:

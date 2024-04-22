@@ -19,6 +19,7 @@ from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, F
 from common.utils import calc_dist, process_amenities_ball_tree
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
+from scraper.singstat.singstat_scraper import SingstatScraper
 
 from task_groups.report import report_tasks
 from task_groups.ml import ml_tasks
@@ -100,6 +101,36 @@ def hdb_pipeline():
         )
         print("Inserted enhanced data into warehouse.int_resale_prices\n")
         print(pd.DataFrame(records))
+
+    @task
+    def calculate_real_prices():
+        pg_hook = PostgresHook("resale_price_db")
+        # Exit gracefully if there are no preexisting data
+        records_exist = pg_hook.get_first("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'warehouse' AND table_name = 'int_resale_prices');")
+        if not records_exist or not records_exist[0]:
+            print("No records exist!")
+            return
+        # Fetch the recent resale price entries
+        resale_prices_df = pg_hook.get_pandas_df("""
+            SELECT id, transaction_month, resale_price
+            FROM warehouse.int_resale_prices
+            WHERE real_resale_price IS NULL;
+        """)
+        # Join with latest CPI data
+        singstat_scraper = SingstatScraper({})
+        cpi_data = singstat_scraper.load_cpi_data()
+        cpi_prices_df = resale_prices_df.merge(cpi_data, left_on='transaction_month', right_on='month', how='inner')
+        cpi_prices_df['real_resale_price'] = (cpi_prices_df['resale_price'] / cpi_prices_df['cpi']) * 100
+        # Update db
+        for _, row in cpi_prices_df.iterrows():
+            pg_hook.run("""
+                UPDATE warehouse.int_resale_prices
+                SET real_resale_price = %s
+                WHERE id = %s;
+                """, 
+                parameters=(row['real_resale_price'], row['id'])
+            )
+        print("Calculated real prices")
     
     @task
     def get_mrts_within_radius():
@@ -253,6 +284,7 @@ def hdb_pipeline():
     # Run tasks
     scrape_resale_prices_ = scrape_resale_prices()
     enhance_resale_price_coords_ = enhance_resale_price_coords(scrape_resale_prices_)
+    calculate_real_prices_ = calculate_real_prices()
     get_mrts_within_radius_ = get_mrts_within_radius()
     get_pri_schs_within_radius_ = get_pri_schs_within_radius()
     get_parks_within_radius_ = get_parks_within_radius()
@@ -260,7 +292,7 @@ def hdb_pipeline():
     get_dist_from_cbd_ = get_dist_from_cbd()
 
     # Pipeline order
-    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> get_mrts_within_radius_  >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
-    get_dist_from_cbd_ >> [report_tasks(), ml_tasks()]
+    scrape_resale_prices_ >>  enhance_resale_price_coords_ >> calculate_real_prices_ >> get_mrts_within_radius_  >> get_pri_schs_within_radius_ >> get_parks_within_radius_ >> get_supermarkets_within_radius_ >> get_dist_from_cbd_
+    get_dist_from_cbd_ >> ml_tasks() >> report_tasks()
 
 hdb_pipeline_dag = hdb_pipeline()

@@ -85,6 +85,23 @@ IMAGE_PATHS = {
          'title': 'Feature Importance for Linear Regression',
          'path': './linear_regression_feature_importance.png'
      },
+    'random_forest_scatter_plot': {
+         'title': 'Observed vs Predicted Prices for Random Forest',
+         'path': './random_forest_scatter_plot.png'
+     },
+     'random_forest_feature_importance': {
+         'title': 'Feature Importance for Random Forest',
+         'path': './random_forest_feature_importance.png'
+     },
+}
+
+METRIC_PATHS = {
+    'lr_metrics': {
+        'path': './lr_metrics.html'
+    },
+    'rf_metrics': {
+        'path': './rf_metrics.html'
+    }
 }
 
 HTML_PATH = './report.html'
@@ -166,6 +183,12 @@ PLOT_TEMPLATE = '''
 <div class="graph-item">
     <div class="graph">{image}</div>
     <div class="graph-caption">{caption}</div>
+</div>
+'''
+
+METRIC_TEMPLATE = '''
+<div class="graph-item">
+    {table}
 </div>
 '''
 
