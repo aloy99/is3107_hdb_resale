@@ -66,7 +66,6 @@ def clean_resale_prices_for_ml(df):
     # Label encode flat type
     replace_values = {'2 ROOM':0, '3 ROOM':1, '4 ROOM':2, '5 ROOM':3, 'EXECUTIVE':4}
     df = df.replace({'flat_type': replace_values})
-    d#f['flat_type'] = df['flat_type'].astype(int)
     # Change lease commence date type to scalable int
     df['lease_commence_date'] = df['lease_commence_date'].apply(lambda x: time.mktime(x.timetuple()))
 
@@ -88,6 +87,10 @@ def clean_resale_prices_for_ml(df):
 
     # concatenate scaled and unscaled features
     df = pd.concat([scaled_columns,unscaled_columns], axis=1)
+
+    #drop object columns that weren't turned into categorical columns
+    df = df.drop(['block','street_name','transaction_month','postal'], axis = 1)
+    #df['transaction_month'] = pd.to_datetime(df['transaction_month'])
 
     # Returned cleaned data
     return df

@@ -6,6 +6,7 @@ from airflow.operators.email_operator import EmailOperator
 
 from reporting.utils import plot_default_features, plot_mrt_info, plot_pri_sch_info, plot_park_info, plot_supermarket_info, create_html_report
 from models.linear_regression import fit_linear_regression
+from models.random_forest import fit_random_forest
 from data_preparation.utils import clean_resale_prices_for_ml
 
 
@@ -40,5 +41,6 @@ def ml_tasks():
     # )
     data = select_and_transform_ml_data()
     fit_linear_regression(data)
+    fit_random_forest(data)
     #data >> report
     #report >> image_mail
