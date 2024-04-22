@@ -55,7 +55,7 @@ IMAGE_PATHS = {
      },
     'resale_price_vs_school_type': {
          'title': 'Price per sqm by School Type',
-         'path': './dist_to_nearest_pri_sch.png'
+         'path': './resale_price_vs_school_type.png'
      },
     'resale_price_vs_school_nature': {
          'title': 'Price per sqm by School Nature',
