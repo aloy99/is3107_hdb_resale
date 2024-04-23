@@ -5,17 +5,15 @@ import logging
 
 from airflow.decorators import dag, task
 from airflow.operators.python import get_current_context
-from airflow.operators.email_operator import EmailOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import dask.dataframe as dd
 
 from common.columns import TABLE_META
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS, CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
+from common.constants import CBD_LANDMARK_ADDRESS, FETCHING_RADIUS
 from common.utils import calc_dist, process_amenities_ball_tree
 from scraper.datagov.resale_price_scraper import ResalePriceScraper
 from scraper.onemap.onemap_scraper import OnemapScraper
@@ -36,34 +34,45 @@ default_args = {
     "retry_delay": timedelta(minutes=10)
 }
 
-@dag(dag_id='hdb_pipeline', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
+@dag(dag_id='daily_pipeline_dag', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
 def hdb_pipeline():
 
     @task
     def scrape_resale_prices():
         context = get_current_context()
         date = context["execution_date"]
-        resale_price_scraper = ResalePriceScraper({}, "backfill") # use `backfill` for all data and `live` to only scrape latest dataset
+        resale_price_scraper = ResalePriceScraper({}, "live") # use `backfill` for all data and `live` to only scrape latest dataset
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
-        for idx, rows in enumerate(resale_price_scraper.run_scrape(date), start=0):
-            if DEV_MODE and idx == DEV_REDUCED_ROWS: break
-            # necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
-            if rows:
+        for _, df in enumerate(resale_price_scraper.run_scrape(date), start=0):
+            for _, row in df.iterrows():
                 with closing(pg_hook.get_conn()) as conn:
                     if pg_hook.supports_autocommit:
                         pg_hook.set_autocommit(conn, True)
                     with closing(conn.cursor()) as cursor:
-                        print(rows)
                         cursor.execute(
                             f"""
                             INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
-                            VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
+                            VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))])}
                             ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
                             RETURNING id;
                             """,
-                            [val for row in rows for val in row]
+                            row.values
                         )
+            # if rows:
+            #     with closing(pg_hook.get_conn()) as conn:
+            #         if pg_hook.supports_autocommit:
+            #             pg_hook.set_autocommit(conn, True)
+            #         with closing(conn.cursor()) as cursor:
+            #             cursor.execute(
+            #                 f"""
+            #                 INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
+            #                 VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
+            #                 ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
+            #                 RETURNING id;
+            #                 """,
+            #                 [val for row in rows for val in row]
+            #             )
                         curr_id = cursor.fetchone()
                         if curr_id:
                             first_id = first_id if first_id else curr_id

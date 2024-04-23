@@ -1,12 +1,30 @@
-DATAGOV_COLLECTIONS_URL = "https://api-production.data.gov.sg/"
+DATAGOV_PROD_URL = "https://api-production.data.gov.sg/"
 DATAGOV_DATASETS_URL = "https://data.gov.sg/"
 
+DOWNLOAD_ENDPOINT = "v2/internal/api/datasets/{}/initiate-download"
 COLLECTIONS_ENDPOINT = "v2/public/api/collections/{}/metadata"
 DATASETS_META_ENDPOINT = "v2/public/api/datasets/{}/metadata"
 DATASETS_ENDPOINT = "api/action/datastore_search"
 
 DATAGOV_GEOJSON = 'https://firebasestorage.googleapis.com/v0/b/storeroom-eac25.appspot.com/o/Parks.geojson?alt=media&token=d48531ed-db36-4824-a0d2-5890ae82786c'
 
+DATAGOV_DOWNLOAD_HEADERS = {
+    'accept': '*/*',
+    'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+    'content-type': 'application/json',
+    'dnt': '1',
+    'origin': 'https://beta.data.gov.sg',
+    'priority': 'u=1, i',
+    'referer': 'https://beta.data.gov.sg/',
+    'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    'sec-ch-ua-mobile': '?1',
+    'sec-ch-ua-platform': '"Android"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-site',
+    'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    'x-dgs-admin-api-key': '',
+}
 
 RESALE_PRICE_COLLECTION_ID = 189
 RESALE_PRICE_FIELDS = [

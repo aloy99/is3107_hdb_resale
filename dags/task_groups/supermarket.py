@@ -16,7 +16,8 @@ def supermarket_tasks():
         supermarket_scraper = SupermarketScraper({})
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
-        for _, rows in enumerate(supermarket_scraper.run_scrape(), start=0):
+        df = supermarket_scraper.run_scrape()
+        for _, row in df.iterrows():
             # necessary to support execute + commit + fetch, pg_hook doesn't support this combination let alone PostgresOperator
             with closing(pg_hook.get_conn()) as conn:
                 if pg_hook.supports_autocommit:
@@ -24,7 +25,7 @@ def supermarket_tasks():
                 with closing(conn.cursor()) as cursor:
                     column_names = ", ".join(SUPERMARKET_FIELDS)
                     placeholders = ", ".join(["%s"] * len(SUPERMARKET_FIELDS))
-                    values_placeholder = ", ".join(["({})".format(placeholders)] * len(rows))
+                    values_placeholder = ", ".join(["({})".format(placeholders)])
                     sql_statement = """
                         INSERT INTO staging.stg_supermarkets ({})
                         VALUES {}
@@ -32,7 +33,7 @@ def supermarket_tasks():
                         business_name = EXCLUDED.business_name
                         RETURNING id;
                     """.format(column_names, values_placeholder)
-                    cursor.execute(sql_statement, [val for row in rows for val in row])
+                    cursor.execute(sql_statement, row.values)
                     curr_id = cursor.fetchone()
                     if curr_id:
                         first_id = first_id if first_id else curr_id

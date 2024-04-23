@@ -1,78 +1,36 @@
 from datetime import datetime, timedelta
-import random
-from numpy import random
-from time import sleep
 import logging
-import json
-from typing import Any, Mapping, Generator, Tuple, Sequence
+from typing import Mapping, Generator
+import pandas as pd
 
-import backoff
-
-from common.constants import DEV_MODE, DEV_REDUCED_ROWS
-from scraper.base_scraper import BaseScraper
+from scraper.datagov.datagov_scraper import DatagovScraper
 from scraper.datagov.constants import (
-    DATAGOV_COLLECTIONS_URL,
-    DATAGOV_DATASETS_URL,
-    COLLECTIONS_ENDPOINT,
+    DATAGOV_PROD_URL,
     DATASETS_META_ENDPOINT,
-    DATASETS_ENDPOINT,
     RESALE_PRICE_COLLECTION_ID,
     RESALE_PRICE_FIELDS,
-    IP_ADDRESSES)
+)
 
 logger = logging.getLogger(__name__)
 
-class ResalePriceScraper(BaseScraper):
+class ResalePriceScraper(DatagovScraper):
 
     def __init__(self, headers: Mapping[str, str], mode: str):
-        super().__init__("", "", headers)
+        super().__init__(headers)
         self.mode = mode
 
-    def scrape_dataset(self, dataset_id: str, params = {}) -> Generator[Mapping[str,Any], None, None]:
-        url = DATAGOV_DATASETS_URL + DATASETS_ENDPOINT + f'?resource_id={dataset_id}'
-        offset = 0
-        total = 1
-        while offset < total:
-            #sleep to prevent rate limit from datagov
-            sleeptime = random.uniform(1.5, 2.0)
-            sleep(sleeptime)
-            data, records = self.get_records(url, params)
-            offset = data['result'].get('offset', 0)
-            total = data['result'].get('total', 0)
-            url = DATAGOV_DATASETS_URL + data['result'].get('_links', {}).get('next').split("&filters")[0]
-
-            if records:
-                #yield [self._row_handler(row) for row in records]
-                yield [row for row in self._records_handler(records)]
+    def scrape_dataset(self, dataset_id: str) -> pd.DataFrame:
+        file_path = self.download_data(dataset_id)
+        df = pd.read_csv(file_path)
+        cleaned_df = self.clean_df(df)
+        return cleaned_df
 
 
-    def _records_handler(self, records: Mapping[str, Any]) -> Generator[Mapping[str,Any], None, None]:
-        for row in records:
-            res = self._row_handler(row)
-            if res:
-                yield res
+    def clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.conform_dataframe_columns(df, RESALE_PRICE_FIELDS)
+        df = df[df['month'] >= '2009-01']
+        return df
     
-    def _row_handler(self, row: Mapping[str, Any]) -> Sequence[Any]:
-        return tuple(row.get(field, None) for field in RESALE_PRICE_FIELDS) if row.get("month",None) >= "2009-01" else None
-
-    
-    @backoff.on_exception(backoff.expo,
-                           (KeyError, json.decoder.JSONDecodeError),
-                           max_tries=3)
-    def get_records(self, url: str, params: str) -> Tuple[Mapping[str, Any], Mapping[str, Any]]:
-        random_ip = random.choice(IP_ADDRESSES)
-        headers = {
-            "X-Forwarded-For": random_ip,
-            "X-Forwarded-Host": random_ip,
-            "X-Host": random_ip,
-            "X-Originating-IP": random_ip,
-            "X-Client-IP": random_ip,
-            "X-Remote-Addr": random_ip
-        }
-        response = self.get_req(url, "", params, headers)
-        print(response.text)
-        data = response.json()
-        return data, data['result']['records']
     
     def run_scrape(self, current_date: datetime):
         if self.mode == 'backfill':
@@ -80,42 +38,27 @@ class ResalePriceScraper(BaseScraper):
         else:
             return self.run_scrape_live(current_date)
 
-    def run_scrape_backfill(self):
-        print("UFHEIJFPJWJFBNIWBIEUByoyoyoyoyoyyoyoyo")
-        params = {} if not DEV_MODE else {'limit': DEV_REDUCED_ROWS}
-        response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), params)
-        collections_data = response.json()
-        try:
-            dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
-        except Exception:
-            logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
+    def run_scrape_backfill(self) -> Generator[pd.DataFrame, None, None]:
+        dataset_ids = self.get_dataset_ids(RESALE_PRICE_COLLECTION_ID)
         for dataset_id in dataset_ids:
-            logger.info(f"Scraping dataset {dataset_id}")
-            yield from self.scrape_dataset(dataset_id)
+            logger.info(f"Downloading dataset {dataset_id}")
+            yield self.scrape_dataset(dataset_id)
 
-    def run_scrape_live(self, current_date: datetime) -> Generator[Mapping[str,Any], None, None]:
-        """
-        Scrapes from the live dataset, for the current month and previous month.
-        API does not support filter for GTE, so two queries are made.
-        """
+    def run_scrape_live(self, current_date: datetime) -> Generator[pd.DataFrame, None, None]:
         curr_month_str = current_date.strftime("%Y-%m")
-        prev_month_str = (current_date.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")    
-        response = self.get_req(DATAGOV_COLLECTIONS_URL, COLLECTIONS_ENDPOINT.format(RESALE_PRICE_COLLECTION_ID), {})
-        collections_data = response.json() 
-        try:
-            dataset_ids = collections_data.get('data').get('collectionMetadata').get('childDatasets')
-        except Exception:
-            logger.exception(f"Unable to find child datasets in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
-        live_dataset_found = False
+        prev_month_str = (current_date.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+        dataset_ids = self.get_dataset_ids(RESALE_PRICE_COLLECTION_ID)
         for dataset_id in dataset_ids:
             dataset_meta_response = self.get_req(
-                DATAGOV_COLLECTIONS_URL,
+                DATAGOV_PROD_URL,
                 DATASETS_META_ENDPOINT.format(dataset_id),
                 {})
             if "onwards" in dataset_meta_response.json().get("data", {}).get("name", {}):
                 live_dataset_found = True
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{prev_month_str}"}}'})
-                yield from self.scrape_dataset(dataset_id, {'filters': f'{{"month": "{curr_month_str}"}}'})
+                logger.info(f"Downloading dataset {dataset_id}")
+                df =  self.scrape_dataset(dataset_id)
+                df = df[df['month'].isin([curr_month_str, prev_month_str])]
+                yield df
         if not live_dataset_found:
             logger.error("Live dataset not found in collection {RESALE_PRICE_COLLECTION_ID}, check DataGov website.")
 
