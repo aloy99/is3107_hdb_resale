@@ -90,7 +90,7 @@ def clean_resale_prices_for_ml(df):
 
     #drop object columns that weren't turned into categorical columns
     df = df.drop(['block','street_name','transaction_month','postal'], axis = 1)
-    #df['transaction_month'] = pd.to_datetime(df['transaction_month'])
+    df = df.dropna(axis = 0, subset = ['real_resale_price'])
 
     # Returned cleaned data
     return df

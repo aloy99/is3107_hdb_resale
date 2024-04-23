@@ -1,5 +1,9 @@
 from datetime import datetime, timedelta
+import random
+from numpy import random
+from time import sleep
 import logging
+import json
 from typing import Any, Mapping, Generator, Tuple, Sequence
 
 import backoff
@@ -13,7 +17,8 @@ from scraper.datagov.constants import (
     DATASETS_META_ENDPOINT,
     DATASETS_ENDPOINT,
     RESALE_PRICE_COLLECTION_ID,
-    RESALE_PRICE_FIELDS)
+    RESALE_PRICE_FIELDS,
+    IP_ADDRESSES)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,9 @@ class ResalePriceScraper(BaseScraper):
         offset = 0
         total = 1
         while offset < total:
+            #sleep to prevent rate limit from datagov
+            sleeptime = random.uniform(1.5, 2.0)
+            sleep(sleeptime)
             data, records = self.get_records(url, params)
             offset = data['result'].get('offset', 0)
             total = data['result'].get('total', 0)
@@ -49,10 +57,20 @@ class ResalePriceScraper(BaseScraper):
 
     
     @backoff.on_exception(backoff.expo,
-                           KeyError,
+                           (KeyError, json.decoder.JSONDecodeError),
                            max_tries=3)
     def get_records(self, url: str, params: str) -> Tuple[Mapping[str, Any], Mapping[str, Any]]:
-        response = self.get_req(url, "", params)
+        random_ip = random.choice(IP_ADDRESSES)
+        headers = {
+            "X-Forwarded-For": random_ip,
+            "X-Forwarded-Host": random_ip,
+            "X-Host": random_ip,
+            "X-Originating-IP": random_ip,
+            "X-Client-IP": random_ip,
+            "X-Remote-Addr": random_ip
+        }
+        response = self.get_req(url, "", params, headers)
+        print(response.text)
         data = response.json()
         return data, data['result']['records']
     
