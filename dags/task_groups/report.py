@@ -85,14 +85,13 @@ def report_tasks():
         # Paste images in report
         return create_html_report()
 
-    # image_mail = EmailOperator(
-    #     task_id="email_report",
-    #     to=['e0560270@u.nus.edu'],
-    #     subject='Resale Price Report',
-    #     html_content='{{ ti.xcom_pull(task_ids="generate_report") }}'
-    #     # provide_context=True
-    # )
+    image_mail = EmailOperator(
+        task_id="email_report",
+        to=['e0560270@u.nus.edu'],
+        subject='Resale Price Report',
+        html_content='{{ ti.xcom_pull(task_ids="report.generate_report") }}'
+        # provide_context=True
+    )
     data = select_and_transform_report_data()
     report = generate_report(data)
-    data >> report
-    #report >> image_mail
+    data >> report >> image_mail

@@ -1,0 +1,6 @@
+FROM python
+RUN pip install mlflow
+RUN apt-get update
+RUN apt-get -y install git
+EXPOSE 5000
+CMD ["mlflow", "server","--host","0.0.0.0","--port","5000"]

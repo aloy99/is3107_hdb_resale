@@ -18,11 +18,12 @@ from scraper.datagov.constants import (
     DATASETS_ENDPOINT,
     RESALE_PRICE_COLLECTION_ID,
     RESALE_PRICE_FIELDS,
-    IP_ADDRESSES)
+    IP_ADDRESSES
+)
 
 logger = logging.getLogger(__name__)
 
-class ResalePriceScraper(BaseScraper):
+class DatagovScraper(BaseScraper):
 
     def __init__(self, headers: Mapping[str, str], mode: str):
         super().__init__("", "", headers)
