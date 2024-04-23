@@ -2,6 +2,7 @@ import logging
 from typing import Any, Mapping, Generator, Tuple, Sequence
 
 import backoff
+from requests.exceptions import JSONDecodeError
 
 from scraper.base_scraper import BaseScraper
 from scraper.datagov.constants import (

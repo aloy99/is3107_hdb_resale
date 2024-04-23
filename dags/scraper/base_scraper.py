@@ -28,12 +28,14 @@ class BaseScraper(ABC):
 
     @backoff.on_exception(backoff.expo,
                           (requests.exceptions.RequestException))
-    def get_req(self, base_url: str, endpoint: str, params: Sequence[Mapping[str,Any]]) -> requests.Response:
+    def get_req(self, base_url: str, endpoint: str, params: Sequence[Mapping[str,Any]], headers = None) -> requests.Response:
+        if headers is None:
+            headers = self.headers
         try:
             response = self.session.get(
                 base_url + endpoint,
                 params = params,
-                headers = self.headers)
+                headers = headers)
             return response
         except Exception as e:
             logger.exception(e)
