@@ -33,8 +33,8 @@ def report_tasks():
                 nm.distance AS distance_to_mrt
             FROM
                 warehouse.int_resale_prices rp
-            JOIN warehouse.int_nearest_mrts as nm ON rp.id = nm.flat_id
-            JOIN warehouse.int_mrts as mrts ON mrts.id = nm.mrt_id;
+            LEFT JOIN warehouse.int_nearest_mrts as nm ON rp.id = nm.flat_id
+            LEFT JOIN warehouse.int_mrts as mrts ON mrts.id = nm.mrt_id;
         """)
         mrt_prices_df = clean_resale_prices_for_visualisation(mrt_prices_df)
         plot_mrt_info(mrt_prices_df)
@@ -52,8 +52,8 @@ def report_tasks():
                 nps.pri_sch_id,
                 nps.distance as distance_to_school
             FROM warehouse.int_resale_prices rp
-            JOIN warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
-            JOIN warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
+            LEFT JOIN warehouse.int_nearest_pri_schools nps ON rp.id = nps.flat_id
+            LEFT JOIN warehouse.int_pri_schools ps ON nps.pri_sch_id = ps.id;
         """)
         pri_sch_prices_df = clean_resale_prices_for_visualisation(pri_sch_prices_df)
         plot_pri_sch_info(pri_sch_prices_df)
@@ -70,8 +70,8 @@ def report_tasks():
                 parks.*,
                 np.distance as distance_to_park
             FROM warehouse.int_resale_prices rp
-            JOIN warehouse.int_nearest_parks np ON rp.id = np.flat_id
-            JOIN warehouse.int_parks parks ON np.park_id = parks.id;
+            LEFT JOIN warehouse.int_nearest_parks np ON rp.id = np.flat_id
+            LEFT JOIN warehouse.int_parks parks ON np.park_id = parks.id;
         """)
         parks_df = clean_resale_prices_for_visualisation(parks_df)
         plot_park_info(parks_df)
@@ -88,8 +88,8 @@ def report_tasks():
                 supermarkets.id,
                 np.distance as distance_to_supermarket
             FROM warehouse.int_resale_prices rp
-            JOIN warehouse.int_nearest_supermarkets np ON rp.id = np.flat_id
-            JOIN warehouse.int_supermarkets supermarkets ON np.supermarket_id = supermarkets.id;
+            LEFT JOIN warehouse.int_nearest_supermarkets np ON rp.id = np.flat_id
+            LEFT JOIN warehouse.int_supermarkets supermarkets ON np.supermarket_id = supermarkets.id;
         """)
         supermarkets_df = clean_resale_prices_for_visualisation(supermarkets_df)
         plot_supermarket_info(supermarkets_df)
