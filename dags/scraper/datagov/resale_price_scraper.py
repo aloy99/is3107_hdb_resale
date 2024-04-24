@@ -29,6 +29,7 @@ class ResalePriceScraper(DatagovScraper):
     def clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self.conform_dataframe_columns(df, RESALE_PRICE_FIELDS)
         df = df[df['month'] >= '2009-01']
+        df = df.where((pd.notnull(df)), None)
         return df
     
     

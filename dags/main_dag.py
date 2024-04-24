@@ -10,6 +10,7 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 
 import pandas as pd
+import numpy as np
 import dask.dataframe as dd
 
 from common.columns import TABLE_META
@@ -34,7 +35,7 @@ default_args = {
     "retry_delay": timedelta(minutes=10)
 }
 
-@dag(dag_id='daily_pipeline_dag', default_args=default_args, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
+@dag(dag_id='daily_pipeline_dag', default_args=default_args, concurrency = 2, schedule=None, catchup=False, tags=['main_dag'], template_searchpath=["/opt/airflow/"])
 def hdb_pipeline():
 
     @task
@@ -45,7 +46,7 @@ def hdb_pipeline():
         pg_hook = PostgresHook("resale_price_db")
         first_id = None
         for _, df in enumerate(resale_price_scraper.run_scrape(date), start=0):
-            for _, row in df.iterrows():
+            for k,g in df.groupby(np.arange(len(df))//100):
                 with closing(pg_hook.get_conn()) as conn:
                     if pg_hook.supports_autocommit:
                         pg_hook.set_autocommit(conn, True)
@@ -53,26 +54,12 @@ def hdb_pipeline():
                         cursor.execute(
                             f"""
                             INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
-                            VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))])}
+                            VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))] * g.shape[0])}
                             ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
                             RETURNING id;
                             """,
-                            row.values
+                            [x for row in g.values for x in row]
                         )
-            # if rows:
-            #     with closing(pg_hook.get_conn()) as conn:
-            #         if pg_hook.supports_autocommit:
-            #             pg_hook.set_autocommit(conn, True)
-            #         with closing(conn.cursor()) as cursor:
-            #             cursor.execute(
-            #                 f"""
-            #                 INSERT INTO staging.stg_resale_prices ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id'])})
-            #                 VALUES {",".join(["({})".format(",".join(['%s'] * (len(TABLE_META['stg_resale_prices'].columns)-1)))]*len(rows))}
-            #                 ON CONFLICT ({",".join([col for col in TABLE_META['stg_resale_prices'].columns if col != 'id' and col != 'remaining_lease'])}) DO NOTHING
-            #                 RETURNING id;
-            #                 """,
-            #                 [val for row in rows for val in row]
-            #             )
                         curr_id = cursor.fetchone()
                         if curr_id:
                             first_id = first_id if first_id else curr_id

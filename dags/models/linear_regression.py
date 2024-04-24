@@ -12,8 +12,9 @@ import seaborn as sns
 import statsmodels.api as sm
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error
 from reporting.utils import save_plot_as_image, save_table_as_html
+from scipy.stats import spearmanr, pearsonr
 
 
 
@@ -46,8 +47,18 @@ def fit_linear_regression(df):
         n = sm.add_constant(X_test).shape[0]
         p = sm.add_constant(X_test).shape[1]
         adj_r2 = 1-(1-r2)*(n-1)/(n-p-1)
+        spearman = spearmanr(np.log(y_test).values.reshape(-1), y_pred)
+        pearson = pearsonr(np.log(y_test).values.reshape(-1), y_pred)
+        oob_mae = mean_absolute_error(np.log(y_test).values.reshape(-1), y_pred)
+
         mlflow.log_metric("Adjusted R2", 1-(1-r2)*(n-1)/(n-p-1))
-        metrics = pd.DataFrame(index = ['Adjusted R2'], data = {'Score': [adj_r2]})
+        mlflow.log_metric('R2 Score',r2)
+        mlflow.log_metric('Spearman correlation',spearman[0])
+        mlflow.log_metric('Pearson correlation',pearson[0])
+        mlflow.log_metric('Mean Absolute Error',round(oob_mae))
+        metrics = pd.DataFrame(
+            index = ['Adjusted R2', 'R2 Score', 'Spearman correlation', 'Pearson correlation', 'Mean Absolute Error'],
+            data = {'Score': [adj_r2, r2, spearman[0], pearson[0], oob_mae]})
         save_table_as_html(metrics.style.set_caption("Linear Regression Metrics"), 'lr_metrics')
         mlflow.statsmodels.log_model(
             statsmodels_model = lin_reg,
