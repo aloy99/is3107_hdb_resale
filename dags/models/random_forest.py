@@ -36,7 +36,7 @@ def fit_random_forest(df):
 
         # Train model
         # Validation using out-of-bag method
-        rf = RandomForestRegressor(n_estimators=100, oob_score=True, random_state=0)
+        rf = RandomForestRegressor(n_estimators=100, n_jobs = 1, max_depth = 10, oob_score=True, random_state=0)
         rf.fit(X_train, y_train.values.ravel())
 
         # predict and get evaluation metrics on test set
