@@ -89,7 +89,7 @@ def clean_resale_prices_for_ml(df):
     df = pd.concat([scaled_columns,unscaled_columns], axis=1)
 
     #drop object columns that weren't turned into categorical columns
-    df = df.drop(['block','street_name','transaction_month','postal', 'resale_price'], axis = 1)
+    df = df.drop(['block','street_name','transaction_month','postal', 'resale_price', 'price_per_sqm'], axis = 1)
     df = df.dropna(axis = 0, subset = ['real_resale_price'])
 
     # Returned cleaned data
